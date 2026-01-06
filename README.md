@@ -200,12 +200,12 @@ await cloverSdk.disableKioskMode(unlockCode: 'MI_CODIGO_SECRETO');
 Future<void> realizarPago() async {
   // Importante: Esperar a que el dispositivo esté conectado
   // antes de procesar pagos
-  
+
   final result = await cloverSdk.sale(
     amount: 1000,  // $10.00 en centavos
     externalId: 'order_${DateTime.now().millisecondsSinceEpoch}',
   );
-  
+
   // La respuesta real llegará en el callback onSaleResponse
   print('Solicitud de pago enviada');
 }
@@ -275,7 +275,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     await _cloverSdk.initialize(
       remoteApplicationId: 'TU_RAID_AQUI',
     );
-    
+
     // Opcional: Mantener la pantalla encendida para aplicaciones POS
     await _cloverSdk.keepScreenOn(keepOn: true);
   }
@@ -445,7 +445,7 @@ Activa el modo inmersivo para ocultar la barra de estado y/o la barra de navegac
 - `success`: `true` si se configuró correctamente
 - `message`: Mensaje descriptivo
 
-**Nota:** 
+**Nota:**
 - El modo inmersivo oculta las barras del sistema permanentemente
 - Las barras se muestran temporalmente cuando el usuario desliza desde los bordes
 - Útil para aplicaciones kiosco/POS donde necesitas pantalla completa

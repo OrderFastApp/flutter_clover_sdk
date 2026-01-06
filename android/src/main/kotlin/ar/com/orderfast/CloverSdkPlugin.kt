@@ -94,8 +94,11 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 ))
             }
 
-            // Inicializar el servicio
+            // Inicializar el servicio de pagos
             paymentService?.initialize()
+
+            // Inicializar el servicio de pagos QR
+            qrPaymentService = QrPaymentService(context)
 
             val response = mapOf(
                 "success" to true,

@@ -74,8 +74,8 @@ android {
         implementation "androidx.work:work-runtime-ktx:2.8.1"
         implementation "androidx.core:core-ktx:1.12.0"
 
-        implementation 'com.clover.sdk:clover-android-sdk:262.2'
-        implementation 'com.clover.sdk:clover-android-connector-sdk:262.2'
+        implementation 'com.clover.sdk:clover-android-sdk:329'
+        implementation 'com.clover.sdk:clover-android-connector-sdk:329'
     }
 
     testOptions {

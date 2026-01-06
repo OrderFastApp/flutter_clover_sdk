@@ -22,8 +22,11 @@ Plugin de Flutter para integrar el SDK de Clover en aplicaciones Android, permit
 ## ✨ Características
 
 - ✅ **Procesar Pagos**: Realizar pagos con tarjeta usando dispositivos Clover
+- ✅ **Pagos con QR**: Mostrar código QR para que el cliente escanee y realice el pago
 - ✅ **Arquitectura Limpia**: Código organizado en capas (models, services, mappers)
 - ✅ **Callbacks Completos**: Sistema de eventos para manejar respuestas
+- ✅ **Modo Kiosco**: Bloquear el sistema para aplicaciones POS/kiosco
+- ✅ **Modo Inmersivo**: Ocultar barras del sistema para pantalla completa
 - ✅ **Basado en Documentación Oficial**: Implementación siguiendo las mejores prácticas de Clover
 
 ## 📋 Requisitos
@@ -120,6 +123,18 @@ void setupCallbacks() {
       print('Mensaje: ${response['message']}');
     }
   };
+
+  // Callback cuando se recibe respuesta de pago QR
+  cloverSdk.onQrPaymentResponse = (response) {
+    if (response['success'] == true) {
+      print('Pago QR exitoso!');
+      print('Payment ID: ${response['payment']?['id']}');
+      print('Monto: ${response['payment']?['amount']}');
+    } else {
+      print('Error en pago QR: ${response['reason']}');
+      print('Mensaje: ${response['message']}');
+    }
+  };
 }
 ```
 
@@ -194,7 +209,7 @@ await cloverSdk.disableKioskMode(unlockCode: 'MI_CODIGO_SECRETO');
 - Para salir del modo kiosco, debes llamar a `disableKioskMode()` con el código correcto
 - Recomendado para aplicaciones POS/kiosco donde necesitas control total
 
-### 6. Procesar un pago
+### 8. Procesar un pago con tarjeta
 
 ```dart
 Future<void> realizarPago() async {
@@ -210,6 +225,40 @@ Future<void> realizarPago() async {
   print('Solicitud de pago enviada');
 }
 ```
+
+### 9. Procesar un pago con QR
+
+```dart
+// Configurar callback para recibir respuesta del pago QR
+cloverSdk.onQrPaymentResponse = (response) {
+  if (response['success'] == true) {
+    print('Pago QR exitoso!');
+    print('Payment ID: ${response['payment']?['id']}');
+  } else {
+    print('Error en pago QR: ${response['reason']}');
+  }
+};
+
+// Presentar QR para que el cliente escanee
+Future<void> realizarPagoQR() async {
+  final result = await cloverSdk.presentQrCode(
+    amount: 1000,  // $10.00 en centavos
+    externalId: 'order_${DateTime.now().millisecondsSinceEpoch}',
+    orderId: 'optional_order_id', // Opcional
+  );
+
+  // El QR se mostrará en la pantalla del dispositivo Clover
+  // El cliente puede escanearlo con su app de pago (Mercado Pago, PayPal, etc.)
+  // La respuesta llegará en el callback onQrPaymentResponse
+  print('QR Code presentado. Esperando que el cliente escanee.');
+}
+```
+
+**Nota sobre Pagos QR:**
+- El QR se muestra en la pantalla del dispositivo Clover
+- El cliente escanea el QR con su app de pago (Mercado Pago, PayPal, Venmo, etc.)
+- La respuesta del pago llegará en el callback `onQrPaymentResponse`
+- No requiere que el dispositivo esté conectado (a diferencia de los pagos con tarjeta)
 
 ## 📚 Ejemplo Completo
 
@@ -265,6 +314,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _lastPayment = response['payment'];
         } else {
           _status = 'Error: ${response['reason']} - ${response['message']}';
+        }
+      });
+    };
+
+    _cloverSdk.onQrPaymentResponse = (response) {
+      setState(() {
+        if (response['success'] == true) {
+          _status = 'Pago QR Exitoso';
+          _lastPayment = response['payment'];
+        } else {
+          _status = 'Error QR: ${response['reason']} - ${response['message']}';
         }
       });
     };
@@ -365,9 +425,28 @@ class _PaymentScreenState extends State<PaymentScreen> {
               onPressed: _deviceConnected ? () => _processPayment(50.00) : null,
               child: Text('Pagar \$50.00'),
             ),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () => _processQrPayment(10.00),
+              child: Text('Pagar con QR \$10.00'),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _processQrPayment(double amount) async {
+    final amountInCents = (amount * 100).toInt();
+    final externalId = 'qr_order_${DateTime.now().millisecondsSinceEpoch}';
+
+    setState(() {
+      _status = 'Mostrando QR Code...';
+    });
+
+    await _cloverSdk.presentQrCode(
+      amount: amountInCents,
+      externalId: externalId,
     );
   }
 
@@ -498,6 +577,26 @@ Verifica si el modo kiosco está actualmente activo.
 - `success`: `true` si la verificación fue exitosa
 - `isActive`: `true` si el modo kiosco está activo, `false` en caso contrario
 
+### `presentQrCode({required int amount, required String externalId, String? orderId})`
+
+Presenta un código QR para que el cliente escanee y realice el pago.
+
+**Parámetros:**
+- `amount` (requerido): Monto en centavos. Ejemplo: $10.00 = 1000 centavos
+- `externalId` (requerido): ID externo único para la transacción. Debe ser único para cada pago.
+- `orderId` (opcional): ID de la orden en Clover
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si el QR se presentó correctamente
+- `message`: Mensaje descriptivo
+
+**Nota:**
+- Muestra un código QR en la pantalla del dispositivo Clover
+- El cliente puede escanear el QR con su app de pago (Mercado Pago, PayPal, Venmo, etc.)
+- La respuesta real del pago llegará en el callback `onQrPaymentResponse`
+- No requiere que el dispositivo esté conectado (a diferencia de los pagos con tarjeta)
+- El QR se genera automáticamente por el sistema Clover
+
 ## 🔔 Callbacks
 
 ### `onInitialized`
@@ -536,7 +635,7 @@ cloverSdk.onDeviceDisconnected = (response) {
 
 ### `onSaleResponse`
 
-Se llama cuando se recibe la respuesta de un pago.
+Se llama cuando se recibe la respuesta de un pago con tarjeta.
 
 ```dart
 cloverSdk.onSaleResponse = (response) {
@@ -547,6 +646,7 @@ cloverSdk.onSaleResponse = (response) {
     // payment['amount'] - Monto en centavos
     // payment['tipAmount'] - Propina en centavos (si aplica)
     // payment['externalPaymentId'] - ID externo del pago
+    // payment['orderId'] - ID de la orden
   } else {
     // Error en el pago
     // response['reason'] - Razón del error
@@ -554,6 +654,31 @@ cloverSdk.onSaleResponse = (response) {
   }
 };
 ```
+
+### `onQrPaymentResponse`
+
+Se llama cuando se recibe la respuesta de un pago con QR.
+
+```dart
+cloverSdk.onQrPaymentResponse = (response) {
+  if (response['success'] == true) {
+    // Pago QR exitoso
+    final payment = response['payment'];
+    // payment['id'] - ID del pago
+    // payment['amount'] - Monto en centavos
+    // payment['tipAmount'] - Propina en centavos (si aplica)
+    // payment['externalPaymentId'] - ID externo del pago
+    // payment['orderId'] - ID de la orden
+    // response['qrCodeData'] - Datos del código QR (si están disponibles)
+  } else {
+    // Error en el pago QR
+    // response['reason'] - Razón del error
+    // response['message'] - Mensaje descriptivo
+  }
+};
+```
+
+**Nota:** Este callback se activa cuando el cliente completa el pago escaneando el QR. La respuesta puede llegar a través de un BroadcastReceiver o callback del sistema Clover.
 
 ## ⚠️ Troubleshooting
 
@@ -571,10 +696,17 @@ cloverSdk.onSaleResponse = (response) {
 
 ### El pago no se procesa
 
-- **Importante**: Espera a que `onDeviceConnected` se llame antes de procesar pagos
+- **Importante**: Para pagos con tarjeta, espera a que `onDeviceConnected` se llame antes de procesar pagos
+- Para pagos con QR, no es necesario esperar la conexión del dispositivo
 - Verifica que el monto esté en **centavos** (ej: $10.00 = 1000)
 - Asegúrate de que el `externalId` sea único para cada transacción
-- Revisa el callback `onSaleResponse` para ver el error específico
+- Revisa el callback correspondiente (`onSaleResponse` o `onQrPaymentResponse`) para ver el error específico
+
+### El QR no se muestra
+
+- Verifica que el servicio de pagos QR esté disponible en el dispositivo
+- Asegúrate de que la app Clover esté instalada y actualizada
+- Revisa los logs de Android para ver errores específicos
 
 ### Error "NOT_INITIALIZED"
 
@@ -608,12 +740,23 @@ El plugin está organizado en capas:
 android/src/main/kotlin/ar/com/orderfast/
 ├── CloverSdkPlugin.kt          # Plugin principal (comunicación Flutter)
 ├── models/
-│   └── PaymentModels.kt        # Modelos de datos
+│   ├── PaymentModels.kt        # Modelos de datos para pagos con tarjeta
+│   └── QrPaymentModels.kt      # Modelos de datos para pagos con QR
 ├── services/
-│   └── PaymentService.kt       # Lógica de negocio y PaymentConnector
+│   ├── PaymentService.kt       # Servicio de pagos con tarjeta (PaymentConnector)
+│   ├── QrPaymentService.kt     # Servicio de pagos con QR (PayIntent)
+│   ├── KioskService.kt         # Servicio de modo kiosco
+│   └── ImmersiveModeService.kt # Servicio de modo inmersivo
 └── mappers/
     └── PaymentMapper.kt        # Conversión entre objetos Clover y modelos
 ```
+
+### Separación de Responsabilidades
+
+- **CloverSdkPlugin**: Maneja la comunicación Flutter ↔ Native a través de MethodChannel
+- **Services**: Contienen la lógica de negocio específica de cada funcionalidad
+- **Models**: Representan los datos de forma independiente del SDK de Clover
+- **Mappers**: Convierten entre objetos del SDK de Clover y modelos internos
 
 ## 📄 Licencia
 

@@ -1,19 +1,16 @@
 package ar.com.orderfast
 
 import android.app.Activity
-import android.app.ActivityManager
-import android.app.KeyguardManager
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import android.view.KeyEvent
-import android.view.View
-import android.view.WindowInsetsController
 import android.view.WindowManager
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import ar.com.orderfast.models.PaymentRequest
+import ar.com.orderfast.models.QrPaymentRequest
 import ar.com.orderfast.services.PaymentService
+import ar.com.orderfast.services.KioskService
+import ar.com.orderfast.services.ImmersiveModeService
+import ar.com.orderfast.services.QrPaymentService
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -36,9 +33,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var context: Context
     private var activity: Activity? = null
     private var paymentService: PaymentService? = null
-    private var immersiveModeActive = false
-    private var kioskModeActive = false
-    private var unlockCode: String? = null
+    private var qrPaymentService: QrPaymentService? = null
+    private var kioskService: KioskService? = null
+    private var immersiveModeService: ImmersiveModeService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -62,6 +59,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "enableKioskMode" -> enableKioskMode(call, result)
                 "disableKioskMode" -> disableKioskMode(call, result)
                 "isKioskModeActive" -> isKioskModeActive(result)
+                "presentQrCode" -> presentQrCode(call, result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -199,66 +197,20 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun setImmersiveMode(call: MethodCall, result: MethodChannel.Result) {
         try {
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
+                return
+            }
+
             val hideStatusBar = call.argument<Boolean>("hideStatusBar") ?: true
             val hideNavigationBar = call.argument<Boolean>("hideNavigationBar") ?: true
 
-            activity?.runOnUiThread {
-                val window = activity?.window ?: return@runOnUiThread
-                val decorView = window.decorView
-
-                // Habilitar edge-to-edge
-                WindowCompat.setDecorFitsSystemWindows(window, false)
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    // Android 11+ (API 30+)
-                    val controller = window.insetsController
-                    if (controller != null) {
-                        var typesToHide = 0
-
-                        if (hideStatusBar) {
-                            typesToHide = typesToHide or WindowInsetsCompat.Type.statusBars()
-                        }
-
-                        if (hideNavigationBar) {
-                            typesToHide = typesToHide or WindowInsetsCompat.Type.navigationBars()
-                        }
-
-                        if (typesToHide != 0) {
-                            controller.hide(typesToHide)
-                            // Mantener el modo inmersivo sticky
-                            controller.systemBarsBehavior =
-                                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        }
-                    }
-                } else {
-                    // Android 10 y anteriores
-                    @Suppress("DEPRECATION")
-                    var flags = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
-
-                    if (hideStatusBar) {
-                        @Suppress("DEPRECATION")
-                        flags = flags or View.SYSTEM_UI_FLAG_FULLSCREEN
-                    }
-
-                    if (hideNavigationBar) {
-                        @Suppress("DEPRECATION")
-                        flags = flags or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    }
-
-                    // Modo inmersivo sticky
-                    @Suppress("DEPRECATION")
-                    flags = flags or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-
-                    @Suppress("DEPRECATION")
-                    decorView.systemUiVisibility = flags
-                }
-
-                immersiveModeActive = true
-
-                Log.d(TAG, "Modo inmersivo activado: statusBar=$hideStatusBar, navigationBar=$hideNavigationBar")
+            // Crear o obtener el servicio de modo inmersivo
+            if (immersiveModeService == null) {
+                immersiveModeService = ImmersiveModeService()
             }
+
+            immersiveModeService?.enable(activity, hideStatusBar, hideNavigationBar)
 
             result.success(mapOf(
                 "success" to true,
@@ -272,30 +224,17 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun exitImmersiveMode(result: MethodChannel.Result) {
         try {
-            activity?.runOnUiThread {
-                val window = activity?.window ?: return@runOnUiThread
-                val decorView = window.decorView
-
-                immersiveModeActive = false
-
-                // Deshabilitar edge-to-edge
-                WindowCompat.setDecorFitsSystemWindows(window, true)
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    // Android 11+ (API 30+)
-                    val controller = window.insetsController
-                    if (controller != null) {
-                        controller.show(WindowInsetsCompat.Type.statusBars())
-                        controller.show(WindowInsetsCompat.Type.navigationBars())
-                    }
-                } else {
-                    // Android 10 y anteriores
-                    @Suppress("DEPRECATION")
-                    decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-                }
-
-                Log.d(TAG, "Modo inmersivo desactivado")
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
+                return
             }
+
+            val immersiveModeService = this.immersiveModeService ?: run {
+                result.error("NOT_INITIALIZED", "El modo inmersivo no está activo", null)
+                return
+            }
+
+            immersiveModeService.disable(activity)
 
             result.success(mapOf(
                 "success" to true,
@@ -309,35 +248,20 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun enableKioskMode(call: MethodCall, result: MethodChannel.Result) {
         try {
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
+                return
+            }
 
-            unlockCode = call.argument<String>("unlockCode")
+            val unlockCode = call.argument<String>("unlockCode")
             val enableScreenPinning = call.argument<Boolean>("enableScreenPinning") ?: true
 
-            activity?.runOnUiThread {
-                try {
-                    if (enableScreenPinning) {
-                        // Intentar activar lock task mode
-                        try {
-                            activity?.startLockTask()
-                            kioskModeActive = true
-                            Log.d(TAG, "Modo kiosco activado (Lock Task Mode)")
-                        } catch (e: SecurityException) {
-                            Log.e(TAG, "No se pudo activar Lock Task Mode. Puede requerir configuración adicional.", e)
-                            // Continuar con otras medidas de bloqueo
-                        }
-                    }
-
-                    // Bloquear botones del sistema
-                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-                    
-                    kioskModeActive = true
-                    Log.d(TAG, "Modo kiosco activado")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error al activar modo kiosco", e)
-                    throw e
-                }
+            // Crear o obtener el servicio de kiosco
+            if (kioskService == null) {
+                kioskService = KioskService(context)
             }
+
+            kioskService?.enable(activity, unlockCode, enableScreenPinning)
 
             result.success(mapOf(
                 "success" to true,
@@ -351,37 +275,21 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun disableKioskMode(call: MethodCall, result: MethodChannel.Result) {
         try {
-            val providedCode = call.argument<String>("unlockCode")
-
-            // Verificar código de desbloqueo si fue configurado
-            if (unlockCode != null && unlockCode != providedCode) {
-                result.error("INVALID_CODE", "Código de desbloqueo incorrecto", null)
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
                 return
             }
 
-            activity?.runOnUiThread {
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        // Desactivar Lock Task Mode
-                        try {
-                            activity?.stopLockTask()
-                            Log.d(TAG, "Lock Task Mode desactivado")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error al desactivar Lock Task Mode", e)
-                        }
-                    }
+            val providedCode = call.argument<String>("unlockCode")
+            val kioskService = this.kioskService ?: run {
+                result.error("NOT_INITIALIZED", "El modo kiosco no está activo", null)
+                return
+            }
 
-                    // Restaurar flags de ventana
-                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-
-                    kioskModeActive = false
-                    unlockCode = null
-                    Log.d(TAG, "Modo kiosco desactivado")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error al desactivar modo kiosco", e)
-                    throw e
-                }
+            val success = kioskService.disable(activity, providedCode)
+            if (!success) {
+                result.error("INVALID_CODE", "Código de desbloqueo incorrecto", null)
+                return
             }
 
             result.success(mapOf(
@@ -396,12 +304,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun isKioskModeActive(result: MethodChannel.Result) {
         try {
-            val isActive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                activityManager.isInLockTaskMode
-            } else {
-                kioskModeActive
-            }
+            val kioskService = this.kioskService ?: KioskService(context)
+            val isActive = kioskService.isActive()
 
             result.success(mapOf(
                 "success" to true,
@@ -413,17 +317,77 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
+    private fun presentQrCode(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
+                return
+            }
+
+            val amountInt = call.argument<Int>("amount")
+            val amount = amountInt?.toLong() ?: run {
+                result.error("MISSING_AMOUNT", "El amount es requerido", null)
+                return
+            }
+
+            val externalId = call.argument<String>("externalId") ?: run {
+                result.error("MISSING_EXTERNAL_ID", "El externalId es requerido", null)
+                return
+            }
+
+            val orderId = call.argument<String>("orderId")
+
+            val qrPaymentService = this.qrPaymentService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            if (!qrPaymentService.isAvailable()) {
+                result.error("SERVICE_UNAVAILABLE", "El servicio de pagos QR no está disponible", null)
+                return
+            }
+
+            val request = QrPaymentRequest(
+                amount = amount,
+                externalId = externalId,
+                orderId = orderId
+            )
+
+            qrPaymentService.presentQrCode(activity, request) { response ->
+                val responseMap = mapOf(
+                    "success" to response.success,
+                    "result" to response.result,
+                    "reason" to response.reason,
+                    "message" to response.message,
+                    "qrCodeData" to response.qrCodeData,
+                    "payment" to response.payment?.let { payment ->
+                        mapOf(
+                            "id" to payment.id,
+                            "orderId" to payment.orderId,
+                            "externalPaymentId" to payment.externalPaymentId,
+                            "amount" to payment.amount,
+                            "tipAmount" to payment.tipAmount,
+                            "taxAmount" to payment.taxAmount,
+                            "result" to payment.result
+                        )
+                    }
+                )
+                channel.invokeMethod("onQrPaymentResponse", responseMap)
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "QR Code presentado. Esperando que el cliente escanee el código."
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al presentar QR Code", e)
+            result.error("QR_PAYMENT_ERROR", e.message, null)
+        }
+    }
+
     // Método para verificar si se debe bloquear una tecla (llamado desde MainActivity)
     fun shouldBlockKey(keyCode: Int): Boolean {
-        if (!kioskModeActive) return false
-
-        // Bloquear botones del sistema en modo kiosco
-        return when (keyCode) {
-            KeyEvent.KEYCODE_HOME,
-            KeyEvent.KEYCODE_APP_SWITCH,
-            KeyEvent.KEYCODE_MENU -> true
-            else -> false
-        }
+        return kioskService?.shouldBlockKey(keyCode) ?: false
     }
 
     // ActivityAware methods
@@ -450,6 +414,11 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         paymentService?.dispose()
         paymentService = null
+        qrPaymentService = null
+        kioskService?.dispose()
+        kioskService = null
+        immersiveModeService?.dispose()
+        immersiveModeService = null
         activity = null
         channel.setMethodCallHandler(null)
         Log.d(TAG, "Plugin detached from engine")

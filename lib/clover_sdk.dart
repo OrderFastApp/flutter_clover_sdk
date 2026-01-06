@@ -20,6 +20,7 @@ class CloverSdkPlugin {
   Function(Map<String, dynamic>)? onDeviceConnected;
   Function(Map<String, dynamic>)? onDeviceDisconnected;
   Function(Map<String, dynamic>)? onSaleResponse;
+  Function(Map<String, dynamic>)? onQrPaymentResponse;
 
   Future<void> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
@@ -34,6 +35,9 @@ class CloverSdkPlugin {
         break;
       case 'onSaleResponse':
         onSaleResponse?.call(Map<String, dynamic>.from(call.arguments));
+        break;
+      case 'onQrPaymentResponse':
+        onQrPaymentResponse?.call(Map<String, dynamic>.from(call.arguments));
         break;
     }
   }
@@ -196,6 +200,33 @@ class CloverSdkPlugin {
   Future<Map<String, dynamic>> isKioskModeActive() async {
     try {
       final result = await _channel.invokeMethod('isKioskModeActive');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Presenta un código QR para que el cliente escanee y realice el pago
+  /// 
+  /// [amount] - Monto del pago en centavos (ej. 1000 para $10.00)
+  /// [externalId] - ID externo único para la transacción
+  /// [orderId] - ID de la orden en Clover (opcional)
+  /// 
+  /// Muestra un código QR en la pantalla del dispositivo Clover que el cliente
+  /// puede escanear con su app de pago (Mercado Pago, PayPal, etc.) para realizar el pago.
+  /// 
+  /// La respuesta del pago llegará en el callback `onQrPaymentResponse`.
+  Future<Map<String, dynamic>> presentQrCode({
+    required int amount,
+    required String externalId,
+    String? orderId,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('presentQrCode', {
+        'amount': amount,
+        'externalId': externalId,
+        if (orderId != null) 'orderId': orderId,
+      });
       return Map<String, dynamic>.from(result);
     } catch (e) {
       return {'success': false, 'error': e.toString()};

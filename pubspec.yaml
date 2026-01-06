@@ -1,6 +1,6 @@
 name: clover_sdk
 description: "Clover SDK for Flutter applications."
-version: 0.3.7
+version: 0.3.8
 homepage:
 
 environment:

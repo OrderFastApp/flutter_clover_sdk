@@ -32,8 +32,9 @@ buildscript {
 
 allprojects {
     repositories {
-        google()
         mavenCentral()
+        google()
+        jcenter()
     }
 }
 
@@ -73,9 +74,8 @@ android {
         implementation "androidx.work:work-runtime-ktx:2.8.1"
 
 
-        implementation('com.clover.sdk:clover-android-sdk:latest.release')
-
-        implementation('com.clover.sdk:clover-android-connector-sdk:latest.release')
+        implementation 'com.clover.sdk:clover-android-sdk:262.2'
+        implementation 'com.clover.sdk:clover-android-connector-sdk:262.2'
     }
 
     testOptions {

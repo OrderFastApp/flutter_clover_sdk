@@ -2,33 +2,36 @@
 
 [![Version](https://img.shields.io/badge/version-0.3.7-blue.svg)](https://pub.dev/packages/clover_sdk)
 [![Flutter](https://img.shields.io/badge/flutter-%3E%3D3.3.0-blue.svg)](https://flutter.dev)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Plugin de Flutter para integrar el SDK de Clover en aplicaciones Android, permitiendo procesar pagos, reembolsos, pre-autorizaciones y más funcionalidades del ecosistema Clover.
+Plugin de Flutter para integrar el SDK de Clover en aplicaciones Android, permitiendo procesar pagos con dispositivos Clover.
+
+> **Nota**: Este plugin está simplificado para procesar pagos únicamente. Para funcionalidades avanzadas, consulta la [documentación oficial de Clover](https://docs.clover.com/dev/docs/take-a-payment-with-payment-connector).
 
 ## 📋 Tabla de Contenidos
 
 - [Características](#-características)
+- [Requisitos](#-requisitos)
 - [Instalación](#-instalación)
 - [Configuración](#-configuración)
 - [Uso Básico](#-uso-básico)
-- [Ejemplos](#-ejemplos)
-- [API Completa](#-api-completa)
-- [Callbacks y Eventos](#-callbacks-y-eventos)
-- [Manejo de Errores](#-manejo-de-errores)
+- [Ejemplo Completo](#-ejemplo-completo)
+- [API](#-api)
+- [Callbacks](#-callbacks)
 - [Troubleshooting](#-troubleshooting)
 
 ## ✨ Características
 
-- ✅ **Pagos (Sales)**: Procesar pagos con tarjeta
-- ✅ **Pre-autorizaciones**: Autorizar pagos antes de capturarlos
-- ✅ **Reembolsos**: Reembolsos parciales y completos
-- ✅ **Reembolsos Manuales**: Reembolsos sin pago previo
-- ✅ **Anulaciones**: Anular pagos y reembolsos
-- ✅ **Consultas**: Recuperar información de pagos y pagos pendientes
-- ✅ **Cierre de Lote**: Realizar cierres de lote
-- ✅ **Lectura de Tarjetas**: Leer datos de tarjetas
-- ✅ **Callbacks Completos**: Sistema completo de eventos y callbacks
+- ✅ **Procesar Pagos**: Realizar pagos con tarjeta usando dispositivos Clover
+- ✅ **Arquitectura Limpia**: Código organizado en capas (models, services, mappers)
+- ✅ **Callbacks Completos**: Sistema de eventos para manejar respuestas
+- ✅ **Basado en Documentación Oficial**: Implementación siguiendo las mejores prácticas de Clover
+
+## 📋 Requisitos
+
+- Flutter >= 3.3.0
+- Android minSdkVersion 21
+- Dispositivo Clover o Clover Dev Kit
+- Remote Application ID (RAID) de tu aplicación Clover
 
 ## 📦 Instalación
 
@@ -52,17 +55,26 @@ flutter pub get
 
 ### Android
 
-El plugin requiere permisos específicos de Clover. Estos ya están incluidos en el plugin, pero asegúrate de que tu aplicación tenga los permisos necesarios:
+El plugin requiere permisos específicos de Clover. Estos ya están incluidos en el plugin, pero asegúrate de que tu aplicación tenga los permisos necesarios en el `AndroidManifest.xml`:
 
 ```xml
-<!-- Permisos necesarios para el SDK de Clover -->
-<uses-permission android:name="com.clover.permission.LAUNCH_PAYMENTS" />
-<uses-permission android:name="com.clover.permission.READ_MERCHANT" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Permisos necesarios para el SDK de Clover -->
+  <uses-permission android:name="com.clover.permission.LAUNCH_PAYMENTS" />
+  <uses-permission android:name="com.clover.permission.READ_MERCHANT" />
+  <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <!-- ... resto de tu manifest ... -->
+</manifest>
 ```
 
-### Inicialización
+### Obtener Remote Application ID (RAID)
 
-El SDK se inicializa automáticamente cuando llamas al método `initialize()`. No requiere configuración adicional en el código.
+1. Ve al [Clover Developer Dashboard](https://www.clover.com/developers)
+2. Crea una nueva aplicación o selecciona una existente
+3. Copia el **Remote Application ID** (RAID) de la configuración de tu app
+4. Este ID es necesario para inicializar el SDK
 
 ## 🚀 Uso Básico
 
@@ -87,22 +99,26 @@ void setupCallbacks() {
     print('SDK inicializado: ${response['success']}');
   };
 
-  // Callback cuando se recibe respuesta de venta
-  cloverSdk.onSaleResponse = (response) {
-    if (response['success'] == true) {
-      print('Pago exitoso: ${response['payment']}');
-    } else {
-      print('Error en pago: ${response['reason']}');
-    }
-  };
-
-  // Callback cuando el dispositivo se conecta/desconecta
+  // Callback cuando el dispositivo se conecta
   cloverSdk.onDeviceConnected = (response) {
     print('Dispositivo conectado');
   };
 
+  // Callback cuando el dispositivo se desconecta
   cloverSdk.onDeviceDisconnected = (response) {
     print('Dispositivo desconectado');
+  };
+
+  // Callback cuando se recibe respuesta de pago
+  cloverSdk.onSaleResponse = (response) {
+    if (response['success'] == true) {
+      print('Pago exitoso!');
+      print('Payment ID: ${response['payment']?['id']}');
+      print('Monto: ${response['payment']?['amount']}');
+    } else {
+      print('Error en pago: ${response['reason']}');
+      print('Mensaje: ${response['message']}');
+    }
   };
 }
 ```
@@ -114,21 +130,24 @@ Future<void> initClover() async {
   setupCallbacks();
 
   final result = await cloverSdk.initialize(
-    // accountName: 'mi_cuenta',  // Opcional
-    // accountType: 'com.clover.account',  // Opcional, por defecto
-    // remoteApplicationId: 'mi_app_id',  // Opcional
+    remoteApplicationId: 'TU_RAID_AQUI', // Reemplaza con tu RAID
   );
 
   if (result['success'] == true) {
     print('SDK inicializado correctamente');
+  } else {
+    print('Error: ${result['error']}');
   }
 }
 ```
 
-### 5. Realizar un pago
+### 5. Procesar un pago
 
 ```dart
 Future<void> realizarPago() async {
+  // Importante: Esperar a que el dispositivo esté conectado
+  // antes de procesar pagos
+
   final result = await cloverSdk.sale(
     amount: 1000,  // $10.00 en centavos
     externalId: 'order_${DateTime.now().millisecondsSinceEpoch}',
@@ -139,9 +158,7 @@ Future<void> realizarPago() async {
 }
 ```
 
-## 📚 Ejemplos
-
-### Ejemplo Completo: Procesar un Pago
+## 📚 Ejemplo Completo
 
 ```dart
 import 'package:flutter/material.dart';
@@ -155,6 +172,7 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   final CloverSdkPlugin _cloverSdk = CloverSdkPlugin.instance;
   String _status = 'No inicializado';
+  bool _deviceConnected = false;
   Map<String, dynamic>? _lastPayment;
 
   @override
@@ -173,37 +191,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
       });
     };
 
+    _cloverSdk.onDeviceConnected = (response) {
+      setState(() {
+        _deviceConnected = true;
+        _status = 'Dispositivo Conectado - Listo para pagos';
+      });
+    };
+
+    _cloverSdk.onDeviceDisconnected = (response) {
+      setState(() {
+        _deviceConnected = false;
+        _status = 'Dispositivo Desconectado';
+      });
+    };
+
     _cloverSdk.onSaleResponse = (response) {
       setState(() {
         if (response['success'] == true) {
           _status = 'Pago Exitoso';
           _lastPayment = response['payment'];
         } else {
-          _status = 'Error: ${response['reason']}';
+          _status = 'Error: ${response['reason']} - ${response['message']}';
         }
-      });
-    };
-
-    _cloverSdk.onDeviceConnected = (response) {
-      setState(() {
-        _status = 'Dispositivo Conectado';
-      });
-    };
-
-    _cloverSdk.onDeviceDisconnected = (response) {
-      setState(() {
-        _status = 'Dispositivo Desconectado';
       });
     };
   }
 
   Future<void> _initializeSDK() async {
-    await _cloverSdk.initialize();
+    // Reemplaza 'TU_RAID_AQUI' con tu Remote Application ID
+    await _cloverSdk.initialize(
+      remoteApplicationId: 'TU_RAID_AQUI',
+    );
   }
 
   Future<void> _processPayment(double amount) async {
+    if (!_deviceConnected) {
+      setState(() {
+        _status = 'Error: Dispositivo no conectado';
+      });
+      return;
+    }
+
     final amountInCents = (amount * 100).toInt();
     final externalId = 'order_${DateTime.now().millisecondsSinceEpoch}';
+
+    setState(() {
+      _status = 'Procesando pago...';
+    });
 
     await _cloverSdk.sale(
       amount: amountInCents,
@@ -226,14 +260,35 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Estado: $_status',
-                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Icon(
+                          _deviceConnected ? Icons.check_circle : Icons.error,
+                          color: _deviceConnected ? Colors.green : Colors.red,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          _status,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                     if (_lastPayment != null) ...[
+                      SizedBox(height: 16),
+                      Divider(),
                       SizedBox(height: 8),
-                      Text('Último Pago:',
-                           style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        'Último Pago:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
                       Text('ID: ${_lastPayment!['id']}'),
-                      Text('Monto: \$${(_lastPayment!['amount'] / 100).toStringAsFixed(2)}'),
+                      Text('Monto: \$${(_lastPayment!['amount']! / 100).toStringAsFixed(2)}'),
+                      if (_lastPayment!['tipAmount'] != null)
+                        Text('Propina: \$${(_lastPayment!['tipAmount']! / 100).toStringAsFixed(2)}'),
                     ],
                   ],
                 ),
@@ -241,13 +296,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => _processPayment(10.00),
+              onPressed: _deviceConnected ? () => _processPayment(10.00) : null,
               child: Text('Pagar \$10.00'),
             ),
             SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () => _processPayment(25.50),
+              onPressed: _deviceConnected ? () => _processPayment(25.50) : null,
               child: Text('Pagar \$25.50'),
+            ),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _deviceConnected ? () => _processPayment(50.00) : null,
+              child: Text('Pagar \$50.00'),
             ),
           ],
         ),
@@ -257,491 +317,172 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   void dispose() {
-    _cloverSdk.disconnect();
+    _cloverSdk.dispose();
     super.dispose();
   }
 }
 ```
 
-### Ejemplo: Pre-autorización y Captura
+## 📖 API
+
+### `initialize({required String remoteApplicationId})`
+
+Inicializa el SDK de Clover.
+
+**Parámetros:**
+- `remoteApplicationId` (requerido): El Remote Application ID (RAID) de tu aplicación Clover
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se inicializó correctamente
+- `error`: Mensaje de error si falló
+
+### `sale({required int amount, required String externalId})`
+
+Procesa un pago.
+
+**Parámetros:**
+- `amount` (requerido): Monto en centavos. Ejemplo: $10.00 = 1000 centavos
+- `externalId` (requerido): ID externo único para la transacción. Debe ser único para cada pago.
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si la solicitud se envió correctamente
+- `message`: Mensaje descriptivo
+
+**Nota:** La respuesta real del pago llegará en el callback `onSaleResponse`.
+
+### `dispose()`
+
+Desconecta y libera recursos del SDK.
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se desconectó correctamente
+
+## 🔔 Callbacks
+
+### `onInitialized`
+
+Se llama cuando el SDK se inicializa correctamente.
 
 ```dart
-String? _preAuthPaymentId;
-
-// 1. Realizar pre-autorización
-Future<void> preAuthorize(double amount) async {
-  _cloverSdk.onPreAuthResponse = (response) {
-    if (response['success'] == true) {
-      _preAuthPaymentId = response['payment']?['id'];
-      print('Pre-autorización exitosa: $_preAuthPaymentId');
-    }
-  };
-
-  await _cloverSdk.preAuth(
-    amount: (amount * 100).toInt(),
-    externalId: 'preauth_${DateTime.now().millisecondsSinceEpoch}',
-  );
-}
-
-// 2. Capturar la pre-autorización
-Future<void> capturePreAuth(double amount, double tip) async {
-  if (_preAuthPaymentId == null) {
-    print('No hay pre-autorización pendiente');
-    return;
-  }
-
-  _cloverSdk.onCapturePreAuthResponse = (response) {
-    if (response['success'] == true) {
-      print('Pre-autorización capturada exitosamente');
-      _preAuthPaymentId = null;
-    }
-  };
-
-  await _cloverSdk.capturePreAuth(
-    amount: (amount * 100).toInt(),
-    paymentId: _preAuthPaymentId!,
-    tipAmount: (tip * 100).toInt(),
-  );
-}
+cloverSdk.onInitialized = (response) {
+  // response['success'] == true
+  // response['message'] == "SDK inicializado correctamente"
+};
 ```
 
-### Ejemplo: Reembolso
+### `onDeviceConnected`
+
+Se llama cuando el dispositivo Clover se conecta.
 
 ```dart
-Future<void> refundPayment(String orderId, String paymentId, double? amount) async {
-  _cloverSdk.onRefundPaymentResponse = (response) {
-    if (response['success'] == true) {
-      print('Reembolso exitoso');
-      print('Refund ID: ${response['refund']?['id']}');
-    } else {
-      print('Error en reembolso: ${response['reason']}');
-    }
-  };
-
-  await _cloverSdk.refundPayment(
-    orderId: orderId,
-    paymentId: paymentId,
-    amount: amount != null ? (amount * 100).toInt() : null,
-    fullRefund: amount == null,  // Si no se especifica monto, es reembolso completo
-  );
-}
+cloverSdk.onDeviceConnected = (response) {
+  // response['success'] == true
+  // response['message'] == "Dispositivo conectado"
+  // Ahora puedes procesar pagos
+};
 ```
 
-### Ejemplo: Reembolso Manual
+### `onDeviceDisconnected`
+
+Se llama cuando el dispositivo Clover se desconecta.
 
 ```dart
-Future<void> manualRefund(double amount) async {
-  _cloverSdk.onManualRefundResponse = (response) {
-    if (response['success'] == true) {
-      print('Reembolso manual exitoso');
-    }
-  };
-
-  await _cloverSdk.manualRefund(
-    amount: (amount * 100).toInt(),
-    externalId: 'manual_refund_${DateTime.now().millisecondsSinceEpoch}',
-  );
-}
+cloverSdk.onDeviceDisconnected = (response) {
+  // response['success'] == false
+  // response['message'] == "Dispositivo desconectado"
+};
 ```
 
-### Ejemplo: Anular un Pago
+### `onSaleResponse`
+
+Se llama cuando se recibe la respuesta de un pago.
 
 ```dart
-Future<void> voidPayment(String orderId, String paymentId) async {
-  _cloverSdk.onVoidPaymentResponse = (response) {
-    if (response['success'] == true) {
-      print('Pago anulado exitosamente');
-    }
-  };
-
-  await _cloverSdk.voidPayment(
-    orderId: orderId,
-    paymentId: paymentId,
-    voidReason: 'Cancelado por el cliente',
-  );
-}
-```
-
-### Ejemplo: Consultar Pagos Pendientes
-
-```dart
-Future<void> checkPendingPayments() async {
-  _cloverSdk.onRetrievePendingPaymentsResponse = (response) {
-    if (response['success'] == true) {
-      final pendingPayments = response['pendingPaymentEntries'] as List?;
-      if (pendingPayments != null && pendingPayments.isNotEmpty) {
-        print('Pagos pendientes: ${pendingPayments.length}');
-        for (var payment in pendingPayments) {
-          print('Payment ID: ${payment['paymentId']}, Amount: ${payment['amount']}');
-        }
-      } else {
-        print('No hay pagos pendientes');
-      }
-    }
-  };
-
-  await _cloverSdk.retrievePendingPayments();
-}
-```
-
-### Ejemplo: Confirmar o Rechazar un Pago
-
-```dart
-Payment? _pendingPayment;
-Challenge? _pendingChallenge;
-
-void _setupConfirmPaymentCallback() {
-  _cloverSdk.onConfirmPaymentRequest = (request) {
-    // Guardar el pago y challenge pendientes
-    _pendingPayment = request['payment'];
-    _pendingChallenge = request['challenges']?.first;
-
-    // Mostrar diálogo al usuario
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirmar Pago'),
-        content: Text('¿Desea confirmar este pago?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _rejectPayment();
-            },
-            child: Text('Rechazar'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmPayment();
-            },
-            child: Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-  };
-}
-
-Future<void> _confirmPayment() async {
-  if (_pendingPayment == null) return;
-
-  await _cloverSdk.confirmPayment(
-    payment: _pendingPayment!,
-    challenges: _pendingChallenge != null ? [_pendingChallenge!] : null,
-  );
-}
-
-Future<void> _rejectPayment() async {
-  if (_pendingPayment == null || _pendingChallenge == null) return;
-
-  await _cloverSdk.rejectPayment(
-    payment: _pendingPayment!,
-    reason: 'Rechazado por el usuario',
-  );
-}
-```
-
-## 📖 API Completa
-
-### Inicialización
-
-```dart
-Future<Map<String, dynamic>> initialize({
-  String? accountName,
-  String accountType = 'com.clover.account',
-  String? remoteApplicationId,
-})
-```
-
-### Pagos
-
-#### Sale (Venta)
-```dart
-Future<Map<String, dynamic>> sale({
-  required int amount,              // Monto en centavos
-  required String externalId,       // ID externo único
-  int tipAmount = 0,                // Propina en centavos
-  int taxAmount = 0,                // Impuesto en centavos
-  int? tippableAmount,              // Monto sobre el cual se puede agregar propina
-  String? orderId,                  // ID de la orden
-  bool disablePrinting = false,     // Deshabilitar impresión
-  bool disableReceiptSelection = false,
-  String? signatureEntryLocation,   // "ON_SCREEN" o "ON_PAPER"
-  int? signatureThreshold,          // Umbral para requerir firma
-  int? cardEntryMethods,            // Métodos de entrada de tarjeta
-  String? vaultedCard,              // ID de tarjeta almacenada
-  bool? allowOfflinePayment,
-  bool? approveOfflinePaymentWithoutPrompt,
-  String? tipMode,                  // "TIP_PROVIDED", "ON_SCREEN", "ON_PAPER", "NO_TIP"
-  bool? disableRestartTransactionOnFail,
-})
-```
-
-#### PreAuth (Pre-autorización)
-```dart
-Future<Map<String, dynamic>> preAuth({
-  required int amount,
-  required String externalId,
-  int? cardEntryMethods,
-  String? vaultedCard,
-})
-```
-
-#### CapturePreAuth (Capturar Pre-autorización)
-```dart
-Future<Map<String, dynamic>> capturePreAuth({
-  required int amount,
-  required String paymentId,
-  int tipAmount = 0,
-})
-```
-
-#### TipAdjustAuth (Ajustar Propina)
-```dart
-Future<Map<String, dynamic>> tipAdjustAuth({
-  required String orderId,
-  required String paymentId,
-  required int tipAmount,
-})
-```
-
-### Reembolsos
-
-#### RefundPayment (Reembolsar Pago)
-```dart
-Future<Map<String, dynamic>> refundPayment({
-  required String orderId,
-  required String paymentId,
-  int? amount,                      // Si es null, es reembolso completo
-  bool fullRefund = false,
-  bool disablePrinting = false,
-  bool disableReceiptSelection = false,
-})
-```
-
-#### ManualRefund (Reembolso Manual)
-```dart
-Future<Map<String, dynamic>> manualRefund({
-  required int amount,
-  required String externalId,
-  int? cardEntryMethods,
-  bool disablePrinting = false,
-  bool disableReceiptSelection = false,
-})
-```
-
-### Anulaciones
-
-#### VoidPayment (Anular Pago)
-```dart
-Future<Map<String, dynamic>> voidPayment({
-  required String orderId,
-  required String paymentId,
-  String? voidReason,
-  bool disablePrinting = false,
-  bool disableReceiptSelection = false,
-})
-```
-
-#### VoidPaymentRefund (Anular Reembolso)
-```dart
-Future<Map<String, dynamic>> voidPaymentRefund({
-  required String refundId,
-  required String orderId,
-  bool disablePrinting = false,
-  bool disableReceiptSelection = false,
-})
-```
-
-### Consultas
-
-#### RetrievePayment (Recuperar Pago)
-```dart
-Future<Map<String, dynamic>> retrievePayment({
-  required String externalPaymentId,
-})
-```
-
-#### RetrievePendingPayments (Recuperar Pagos Pendientes)
-```dart
-Future<Map<String, dynamic>> retrievePendingPayments()
-```
-
-### Otros
-
-#### Closeout (Cierre de Lote)
-```dart
-Future<Map<String, dynamic>> closeout({
-  bool allowOpenTabs = false,
-  String? batchId,
-})
-```
-
-#### ReadCardData (Leer Datos de Tarjeta)
-```dart
-Future<Map<String, dynamic>> readCardData({
-  int? cardEntryMethods,
-})
-```
-
-#### ConfirmPayment (Confirmar Pago)
-```dart
-Future<Map<String, dynamic>> confirmPayment({
-  required Map<String, dynamic> payment,
-  List<Map<String, dynamic>>? challenges,
-})
-```
-
-#### RejectPayment (Rechazar Pago)
-```dart
-Future<Map<String, dynamic>> rejectPayment({
-  required Map<String, dynamic> payment,
-  required String reason,
-})
-```
-
-#### Disconnect (Desconectar)
-```dart
-Future<Map<String, dynamic>> disconnect()
-```
-
-## 🔔 Callbacks y Eventos
-
-Todos los callbacks reciben un `Map<String, dynamic>` con la información de la respuesta:
-
-### Callbacks de Estado
-
-- **`onInitialized`**: Se llama cuando el SDK se inicializa correctamente
-- **`onDeviceConnected`**: Se llama cuando el dispositivo Clover se conecta
-- **`onDeviceDisconnected`**: Se llama cuando el dispositivo Clover se desconecta
-- **`onServiceDisconnected`**: Se llama cuando el servicio se desconecta
-
-### Callbacks de Pagos
-
-- **`onSaleResponse`**: Respuesta de una venta (sale)
-- **`onPreAuthResponse`**: Respuesta de una pre-autorización
-- **`onAuthResponse`**: Respuesta de una autorización
-- **`onCapturePreAuthResponse`**: Respuesta de captura de pre-autorización
-- **`onTipAdjustAuthResponse`**: Respuesta de ajuste de propina
-- **`onTipAdded`**: Se llama cuando se agrega una propina
-
-### Callbacks de Reembolsos
-
-- **`onRefundPaymentResponse`**: Respuesta de reembolso de pago
-- **`onManualRefundResponse`**: Respuesta de reembolso manual
-- **`onVoidPaymentRefundResponse`**: Respuesta de anulación de reembolso
-
-### Callbacks de Anulaciones
-
-- **`onVoidPaymentResponse`**: Respuesta de anulación de pago
-
-### Callbacks de Consultas
-
-- **`onRetrievePaymentResponse`**: Respuesta de recuperación de pago
-- **`onRetrievePendingPaymentsResponse`**: Respuesta de pagos pendientes
-
-### Callbacks de Otros
-
-- **`onCloseoutResponse`**: Respuesta de cierre de lote
-- **`onReadCardDataResponse`**: Respuesta de lectura de datos de tarjeta
-- **`onVerifySignatureRequest`**: Solicitud de verificación de firma
-- **`onConfirmPaymentRequest`**: Solicitud de confirmación de pago
-- **`onVaultCardResponse`**: Respuesta de almacenamiento de tarjeta
-
-### Estructura de Respuestas
-
-Todas las respuestas de pago/reembolso incluyen:
-
-```dart
-{
-  'success': bool,           // Si la operación fue exitosa
-  'result': String,          // Resultado de la operación
-  'reason': String?,         // Razón del error (si hay)
-  'message': String?,        // Mensaje descriptivo
-  'payment': Map?,           // Información del pago (si aplica)
-  'refund': Map?,            // Información del reembolso (si aplica)
-  // ... otros campos específicos según el tipo de respuesta
-}
-```
-
-## ⚠️ Manejo de Errores
-
-El SDK maneja errores de varias formas:
-
-1. **Errores en métodos**: Los métodos retornan un `Map` con `success: false` y `error`:
-
-```dart
-final result = await _cloverSdk.sale(amount: 1000, externalId: 'test');
-if (result['success'] == false) {
-  print('Error: ${result['error']}');
-}
-```
-
-2. **Errores en callbacks**: Los callbacks incluyen información de error:
-
-```dart
-_cloverSdk.onSaleResponse = (response) {
-  if (response['success'] == false) {
-    print('Error: ${response['reason']}');
-    print('Mensaje: ${response['message']}');
+cloverSdk.onSaleResponse = (response) {
+  if (response['success'] == true) {
+    // Pago exitoso
+    final payment = response['payment'];
+    // payment['id'] - ID del pago
+    // payment['amount'] - Monto en centavos
+    // payment['tipAmount'] - Propina en centavos (si aplica)
+    // payment['externalPaymentId'] - ID externo del pago
+  } else {
+    // Error en el pago
+    // response['reason'] - Razón del error
+    // response['message'] - Mensaje descriptivo
   }
 };
 ```
 
-3. **Excepciones**: Algunos errores pueden lanzar excepciones, úsalos con try-catch:
-
-```dart
-try {
-  await _cloverSdk.initialize();
-} catch (e) {
-  print('Excepción: $e');
-}
-```
-
-## 🔧 Troubleshooting
+## ⚠️ Troubleshooting
 
 ### El SDK no se inicializa
 
-- Verifica que tengas los permisos necesarios en el AndroidManifest
-- Asegúrate de que el dispositivo Clover esté conectado y funcionando
-- Verifica que la cuenta de Clover esté configurada correctamente
+- Verifica que tengas el **Remote Application ID (RAID)** correcto
+- Asegúrate de que los permisos estén en el `AndroidManifest.xml`
+- Verifica que el dispositivo Clover esté encendido y funcionando
 
-### No se reciben callbacks
+### No se recibe el callback `onDeviceConnected`
 
-- Asegúrate de configurar los callbacks antes de llamar a los métodos
-- Verifica que el SDK esté inicializado correctamente
+- Espera unos segundos después de inicializar el SDK
+- Verifica que el dispositivo Clover esté conectado a la red
 - Revisa los logs de Android para ver errores del SDK
 
-### Errores de conexión
+### El pago no se procesa
 
-- Verifica que el dispositivo Clover esté encendido y conectado
-- Asegúrate de que la aplicación tenga los permisos necesarios
-- Intenta reinicializar el SDK llamando a `disconnect()` y luego `initialize()`
-
-### Pagos que no se procesan
-
-- Verifica que el monto esté en centavos (ej: $10.00 = 1000)
+- **Importante**: Espera a que `onDeviceConnected` se llame antes de procesar pagos
+- Verifica que el monto esté en **centavos** (ej: $10.00 = 1000)
 - Asegúrate de que el `externalId` sea único para cada transacción
-- Revisa los callbacks de error para más información
+- Revisa el callback `onSaleResponse` para ver el error específico
+
+### Error "NOT_INITIALIZED"
+
+- Asegúrate de llamar a `initialize()` antes de procesar pagos
+- Verifica que el `remoteApplicationId` sea correcto
 
 ## 📝 Notas Importantes
 
 1. **Montos**: Todos los montos deben estar en **centavos** (ej: $10.00 = 1000 centavos)
 
-2. **External IDs**: Los `externalId` deben ser únicos. Usa timestamps o UUIDs para generarlos
+2. **External IDs**: Los `externalId` deben ser únicos. Usa timestamps o UUIDs:
+   ```dart
+   final externalId = 'order_${DateTime.now().millisecondsSinceEpoch}';
+   // o
+   final externalId = Uuid().v4();
+   ```
 
-3. **Callbacks**: Los callbacks deben configurarse **antes** de llamar a los métodos que los generan
+3. **Esperar Conexión**: Siempre espera a que `onDeviceConnected` se llame antes de procesar pagos
 
-4. **Threading**: El SDK maneja automáticamente el threading, pero asegúrate de actualizar la UI desde el hilo principal
+4. **Callbacks**: Los callbacks deben configurarse **antes** de llamar a `initialize()`
 
-5. **Lifecycle**: Siempre llama a `disconnect()` cuando termines de usar el SDK (por ejemplo, en `dispose()`)
+5. **Lifecycle**: Siempre llama a `dispose()` cuando termines de usar el SDK (por ejemplo, en `dispose()` del widget)
 
-6. **Confirmación de Pagos**: Algunos pagos pueden requerir confirmación. Usa `onConfirmPaymentRequest` para manejar esto
+6. **Threading**: El SDK maneja automáticamente el threading, pero asegúrate de actualizar la UI desde el hilo principal usando `setState()`
+
+## 🏗️ Arquitectura
+
+El plugin está organizado en capas:
+
+```
+android/src/main/kotlin/ar/com/orderfast/
+├── CloverSdkPlugin.kt          # Plugin principal (comunicación Flutter)
+├── models/
+│   └── PaymentModels.kt        # Modelos de datos
+├── services/
+│   └── PaymentService.kt       # Lógica de negocio y PaymentConnector
+└── mappers/
+    └── PaymentMapper.kt        # Conversión entre objetos Clover y modelos
+```
 
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
+
+## 📚 Referencias
+
+- [Documentación Oficial de Clover](https://docs.clover.com/dev/docs/take-a-payment-with-payment-connector)
+- [Clover Developer Dashboard](https://www.clover.com/developers)
+- [Clover Android SDK](https://github.com/clover/clover-android-sdk)
 
 ## 🤝 Contribuciones
 
@@ -752,15 +493,6 @@ Las contribuciones son bienvenidas. Por favor:
 3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
-
-## 📧 Soporte
-
-Para reportar bugs o solicitar features, por favor abre un issue en el repositorio.
-
-## 🙏 Agradecimientos
-
-- Clover Network por el SDK oficial de Android
-- La comunidad de Flutter por las herramientas y recursos
 
 ---
 

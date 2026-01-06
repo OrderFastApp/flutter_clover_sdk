@@ -15,83 +15,84 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final CloverSdkPlugin _cloverSdk = CloverSdkPlugin.instance;
   String _status = 'No inicializado';
-  String _lastResponse = '';
+  bool _deviceConnected = false;
+  Map<String, dynamic>? _lastPayment;
 
   @override
   void initState() {
     super.initState();
     _setupCallbacks();
+    _initializeSDK();
   }
 
   void _setupCallbacks() {
     _cloverSdk.onInitialized = (response) {
       setState(() {
-        _status = response['success'] == true
-            ? 'Inicializado correctamente'
-            : 'Error al inicializar';
-        _lastResponse = response.toString();
+        _status = response['success'] == true 
+            ? 'SDK Inicializado' 
+            : 'Error al inicializar: ${response['error']}';
       });
     };
 
-    _cloverSdk.onServiceDisconnected = (response) {
+    _cloverSdk.onDeviceConnected = (response) {
       setState(() {
-        _status = 'Servicio desconectado';
-        _lastResponse = response.toString();
+        _deviceConnected = true;
+        _status = 'Dispositivo Conectado - Listo para pagos';
+      });
+    };
+
+    _cloverSdk.onDeviceDisconnected = (response) {
+      setState(() {
+        _deviceConnected = false;
+        _status = 'Dispositivo Desconectado';
       });
     };
 
     _cloverSdk.onSaleResponse = (response) {
       setState(() {
-        _status = 'Respuesta de venta recibida';
-        _lastResponse = response.toString();
+        if (response['success'] == true) {
+          _status = 'Pago Exitoso';
+          _lastPayment = response['payment'];
+        } else {
+          _status = 'Error: ${response['reason']} - ${response['message']}';
+        }
       });
-    };
-
-    _cloverSdk.onRefundPaymentResponse = (response) {
-      setState(() {
-        _status = 'Respuesta de reembolso recibida';
-        _lastResponse = response.toString();
-      });
-    };
-
-    _cloverSdk.onConfirmPaymentRequest = (request) {
-      setState(() {
-        _status = 'Confirmación de pago requerida';
-        _lastResponse = request.toString();
-      });
-      // Aquí puedes confirmar o rechazar el pago
-      // _cloverSdk.confirmPayment(payment: request['payment'], challenges: request['challenges']);
     };
   }
 
-  Future<void> _initialize() async {
-    final result = await _cloverSdk.initialize();
-    setState(() {
-      _status = result['success'] == true
-          ? 'Inicializando...'
-          : 'Error: ${result['error']}';
-    });
-  }
-
-  Future<void> _sale() async {
-    final result = await _cloverSdk.sale(
-      amount: 1000, // $10.00 en centavos
-      externalId: 'order_${DateTime.now().millisecondsSinceEpoch}',
+  Future<void> _initializeSDK() async {
+    // IMPORTANTE: Reemplaza 'TU_RAID_AQUI' con tu Remote Application ID
+    // Obtén tu RAID desde: https://www.clover.com/developers
+    final result = await _cloverSdk.initialize(
+      remoteApplicationId: 'TU_RAID_AQUI', // Reemplaza con tu RAID
     );
-    setState(() {
-      _status = result['success'] == true
-          ? 'Venta enviada'
-          : 'Error: ${result['error']}';
-    });
+    
+    if (result['success'] != true) {
+      setState(() {
+        _status = 'Error al inicializar: ${result['error']}';
+      });
+    }
   }
 
-  Future<void> _disconnect() async {
-    final result = await _cloverSdk.disconnect();
+  Future<void> _processPayment(double amount) async {
+    if (!_deviceConnected) {
+      setState(() {
+        _status = 'Error: Dispositivo no conectado. Espera a que se conecte.';
+      });
+      return;
+    }
+
+    final amountInCents = (amount * 100).toInt();
+    final externalId = 'order_${DateTime.now().millisecondsSinceEpoch}';
+    
     setState(() {
-      _status = result['success'] == true
-          ? 'Desconectado'
-          : 'Error: ${result['error']}';
+      _status = 'Procesando pago de \$${amount.toStringAsFixed(2)}...';
     });
+
+    await _cloverSdk.sale(
+      amount: amountInCents,
+      externalId: externalId,
+    );
   }
 
   @override
@@ -112,47 +113,67 @@ class _MyAppState extends State<MyApp> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Estado: $_status',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Icon(
+                            _deviceConnected ? Icons.check_circle : Icons.error,
+                            color: _deviceConnected ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _status,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      if (_lastResponse.isNotEmpty)
-                        Text(
-                          'Última respuesta:',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                      if (_lastPayment != null) ...[
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Último Pago:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
-                      if (_lastResponse.isNotEmpty)
-                        Text(
-                          _lastResponse,
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                        const SizedBox(height: 4),
+                        Text('ID: ${_lastPayment!['id']}'),
+                        Text('Monto: \$${(_lastPayment!['amount']! / 100).toStringAsFixed(2)}'),
+                        if (_lastPayment!['tipAmount'] != null)
+                          Text('Propina: \$${(_lastPayment!['tipAmount']! / 100).toStringAsFixed(2)}'),
+                      ],
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _initialize,
-                child: const Text('Inicializar SDK'),
+                onPressed: _deviceConnected ? () => _processPayment(10.00) : null,
+                child: const Text('Pagar \$10.00'),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: _sale,
-                child: const Text('Realizar Venta ($10.00)'),
+                onPressed: _deviceConnected ? () => _processPayment(25.50) : null,
+                child: const Text('Pagar \$25.50'),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: _disconnect,
-                child: const Text('Desconectar'),
+                onPressed: _deviceConnected ? () => _processPayment(50.00) : null,
+                child: const Text('Pagar \$50.00'),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _cloverSdk.dispose();
+    super.dispose();
   }
 }

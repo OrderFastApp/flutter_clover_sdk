@@ -256,15 +256,12 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 return
             }
 
-            val unlockCode = call.argument<String>("unlockCode")
-            val enableScreenPinning = call.argument<Boolean>("enableScreenPinning") ?: true
-
             // Crear o obtener el servicio de kiosco
             if (kioskService == null) {
                 kioskService = KioskService(context)
             }
 
-            kioskService?.enable(activity, unlockCode, enableScreenPinning)
+            kioskService?.enable(activity)
 
             result.success(mapOf(
                 "success" to true,
@@ -283,13 +280,12 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 return
             }
 
-            val providedCode = call.argument<String>("unlockCode")
             val kioskService = this.kioskService ?: run {
                 result.error("NOT_INITIALIZED", "El modo kiosco no está activo", null)
                 return
             }
 
-            val success = kioskService.disable(activity, providedCode)
+            val success = kioskService.disable(activity)
             if (!success) {
                 result.error("INVALID_CODE", "Código de desbloqueo incorrecto", null)
                 return
@@ -308,7 +304,13 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun isKioskModeActive(result: MethodChannel.Result) {
         try {
             val kioskService = this.kioskService ?: KioskService(context)
-            val isActive = kioskService.isActive()
+
+            val activity = this.activity ?: run {
+                result.error("NO_ACTIVITY", "No hay actividad disponible", null)
+                return
+            }
+
+            val isActive = kioskService.isActive(activity)
 
             result.success(mapOf(
                 "success" to true,
@@ -388,11 +390,6 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
-    // Método para verificar si se debe bloquear una tecla (llamado desde MainActivity)
-    fun shouldBlockKey(keyCode: Int): Boolean {
-        return kioskService?.shouldBlockKey(keyCode) ?: false
-    }
-
     // ActivityAware methods
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
@@ -415,6 +412,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+
+
         paymentService?.dispose()
         paymentService = null
         qrPaymentService = null

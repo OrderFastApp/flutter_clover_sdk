@@ -43,9 +43,9 @@ class CloverSdkPlugin {
   }
 
   /// Inicializa el SDK de Clover
-  /// 
+  ///
   /// [remoteApplicationId] - ID de la aplicación remota (RAID) - REQUERIDO
-  /// 
+  ///
   /// Este ID se obtiene del Clover Developer Dashboard cuando creas tu app
   Future<Map<String, dynamic>> initialize({
     required String remoteApplicationId,
@@ -61,10 +61,10 @@ class CloverSdkPlugin {
   }
 
   /// Procesa un pago (sale)
-  /// 
+  ///
   /// [amount] - Monto en centavos (requerido). Ejemplo: $10.00 = 1000 centavos
   /// [externalId] - ID externo único para la transacción (requerido)
-  /// 
+  ///
   /// La respuesta real llegará en el callback [onSaleResponse]
   Future<Map<String, dynamic>> sale({
     required int amount,
@@ -92,9 +92,9 @@ class CloverSdkPlugin {
   }
 
   /// Mantiene la pantalla encendida o la libera
-  /// 
+  ///
   /// [keepOn] - Si es true, mantiene la pantalla encendida. Si es false, permite que se apague (por defecto: true)
-  /// 
+  ///
   /// Útil para aplicaciones POS donde necesitas mantener la pantalla activa durante las transacciones
   Future<Map<String, dynamic>> keepScreenOn({bool keepOn = true}) async {
     try {
@@ -108,7 +108,7 @@ class CloverSdkPlugin {
   }
 
   /// Libera el flag que mantiene la pantalla encendida
-  /// 
+  ///
   /// Permite que la pantalla se apague normalmente según la configuración del sistema
   Future<Map<String, dynamic>> releaseScreenOn() async {
     try {
@@ -120,10 +120,10 @@ class CloverSdkPlugin {
   }
 
   /// Activa el modo inmersivo para ocultar la barra de estado y/o navegación
-  /// 
+  ///
   /// [hideStatusBar] - Si es true, oculta la barra de estado (por defecto: true)
   /// [hideNavigationBar] - Si es true, oculta la barra de navegación (por defecto: true)
-  /// 
+  ///
   /// El modo inmersivo oculta las barras del sistema y las muestra temporalmente
   /// cuando el usuario desliza desde los bordes. Útil para aplicaciones kiosco/POS.
   Future<Map<String, dynamic>> setImmersiveMode({
@@ -142,7 +142,7 @@ class CloverSdkPlugin {
   }
 
   /// Desactiva el modo inmersivo y muestra las barras del sistema
-  /// 
+  ///
   /// Restaura la barra de estado y la barra de navegación a su estado normal
   Future<Map<String, dynamic>> exitImmersiveMode() async {
     try {
@@ -153,25 +153,10 @@ class CloverSdkPlugin {
     }
   }
 
-  /// Activa el modo kiosco para bloquear el sistema y prevenir que se salga de la app
-  /// 
-  /// [unlockCode] - Código opcional requerido para desactivar el modo kiosco (recomendado)
-  /// [enableScreenPinning] - Si es true, activa Screen Pinning/Lock Task Mode (por defecto: true)
-  /// 
-  /// **IMPORTANTE:** 
-  /// - Bloquea los botones HOME, RECENT APPS, MENU y BACK
-  /// - Requiere Android 5.0+ (API 21+)
-  /// - Para desactivar, usa disableKioskMode() con el código de desbloqueo
-  /// - En algunos dispositivos puede requerir configuración adicional del administrador del dispositivo
-  Future<Map<String, dynamic>> enableKioskMode({
-    String? unlockCode,
-    bool enableScreenPinning = true,
-  }) async {
+  /// Activa el modo kiosco (customer mode)
+  Future<Map<String, dynamic>> enableKioskMode() async {
     try {
-      final result = await _channel.invokeMethod('enableKioskMode', {
-        'unlockCode': unlockCode,
-        'enableScreenPinning': enableScreenPinning,
-      });
+      final result = await _channel.invokeMethod('enableKioskMode');
       return Map<String, dynamic>.from(result);
     } catch (e) {
       return {'success': false, 'error': e.toString()};
@@ -179,15 +164,11 @@ class CloverSdkPlugin {
   }
 
   /// Desactiva el modo kiosco
-  /// 
-  /// [unlockCode] - Código de desbloqueo (requerido si se configuró al activar)
-  /// 
+  ///
   /// Restaura la funcionalidad normal del sistema y permite salir de la app
-  Future<Map<String, dynamic>> disableKioskMode({String? unlockCode}) async {
+  Future<Map<String, dynamic>> disableKioskMode() async {
     try {
-      final result = await _channel.invokeMethod('disableKioskMode', {
-        'unlockCode': unlockCode,
-      });
+      final result = await _channel.invokeMethod('disableKioskMode');
       return Map<String, dynamic>.from(result);
     } catch (e) {
       return {'success': false, 'error': e.toString()};
@@ -195,7 +176,7 @@ class CloverSdkPlugin {
   }
 
   /// Verifica si el modo kiosco está activo
-  /// 
+  ///
   /// Retorna true si el modo kiosco está activo, false en caso contrario
   Future<Map<String, dynamic>> isKioskModeActive() async {
     try {
@@ -207,14 +188,14 @@ class CloverSdkPlugin {
   }
 
   /// Presenta un código QR para que el cliente escanee y realice el pago
-  /// 
+  ///
   /// [amount] - Monto del pago en centavos (ej. 1000 para $10.00)
   /// [externalId] - ID externo único para la transacción
   /// [orderId] - ID de la orden en Clover (opcional)
-  /// 
+  ///
   /// Muestra un código QR en la pantalla del dispositivo Clover que el cliente
   /// puede escanear con su app de pago (Mercado Pago, PayPal, etc.) para realizar el pago.
-  /// 
+  ///
   /// La respuesta del pago llegará en el callback `onQrPaymentResponse`.
   Future<Map<String, dynamic>> presentQrCode({
     required int amount,

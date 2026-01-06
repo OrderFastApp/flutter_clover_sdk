@@ -9,8 +9,10 @@ import ar.com.orderfast.mappers.PaymentMapper
 import com.clover.connector.sdk.v3.PaymentConnector
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v3.connector.IPaymentConnectorListener
+import com.clover.sdk.v3.payments.TipMode
 import com.clover.sdk.v3.remotepay.SaleRequest
 import com.clover.sdk.v3.remotepay.SaleResponse
+import com.clover.sdk.v3.remotepay.TransactionType
 
 /**
  * Servicio para manejar operaciones de pago con Clover
@@ -71,6 +73,14 @@ class PaymentService(
         val saleRequest = SaleRequest().apply {
             externalId = request.externalId
             amount = request.amount
+            type = TransactionType.PAYMENT
+            disablePrinting = true
+            disableReceiptSelection = true
+            disableCashback = true
+            disableDuplicateChecking = true
+            disableRestartTransactionOnFail = true
+            tipMode = TipMode.NO_TIP
+
         }
 
         try {

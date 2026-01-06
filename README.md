@@ -141,18 +141,28 @@ Future<void> initClover() async {
 }
 ```
 
-### 5. Procesar un pago
+### 5. Mantener la pantalla encendida (Opcional)
+
+```dart
+// Mantener la pantalla encendida (útil para aplicaciones POS)
+await cloverSdk.keepScreenOn(keepOn: true);
+
+// O liberar el flag para permitir que se apague
+await cloverSdk.releaseScreenOn();
+```
+
+### 6. Procesar un pago
 
 ```dart
 Future<void> realizarPago() async {
   // Importante: Esperar a que el dispositivo esté conectado
   // antes de procesar pagos
-
+  
   final result = await cloverSdk.sale(
     amount: 1000,  // $10.00 en centavos
     externalId: 'order_${DateTime.now().millisecondsSinceEpoch}',
   );
-
+  
   // La respuesta real llegará en el callback onSaleResponse
   print('Solicitud de pago enviada');
 }
@@ -222,6 +232,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     await _cloverSdk.initialize(
       remoteApplicationId: 'TU_RAID_AQUI',
     );
+    
+    // Opcional: Mantener la pantalla encendida para aplicaciones POS
+    await _cloverSdk.keepScreenOn(keepOn: true);
   }
 
   Future<void> _processPayment(double amount) async {
@@ -356,6 +369,26 @@ Desconecta y libera recursos del SDK.
 
 **Retorna:** `Future<Map<String, dynamic>>` con:
 - `success`: `true` si se desconectó correctamente
+
+### `keepScreenOn({bool keepOn = true})`
+
+Mantiene la pantalla encendida o la libera.
+
+**Parámetros:**
+- `keepOn` (opcional): Si es `true`, mantiene la pantalla encendida. Si es `false`, permite que se apague (por defecto: `true`)
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se configuró correctamente
+- `message`: Mensaje descriptivo
+
+**Nota:** Útil para aplicaciones POS donde necesitas mantener la pantalla activa durante las transacciones. La pantalla se mantendrá encendida hasta que llames a `releaseScreenOn()` o `dispose()`.
+
+### `releaseScreenOn()`
+
+Libera el flag que mantiene la pantalla encendida, permitiendo que la pantalla se apague normalmente según la configuración del sistema.
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se liberó correctamente
 
 ## 🔔 Callbacks
 

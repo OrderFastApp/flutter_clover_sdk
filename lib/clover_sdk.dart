@@ -86,4 +86,32 @@ class CloverSdkPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  /// Mantiene la pantalla encendida o la libera
+  /// 
+  /// [keepOn] - Si es true, mantiene la pantalla encendida. Si es false, permite que se apague (por defecto: true)
+  /// 
+  /// Útil para aplicaciones POS donde necesitas mantener la pantalla activa durante las transacciones
+  Future<Map<String, dynamic>> keepScreenOn({bool keepOn = true}) async {
+    try {
+      final result = await _channel.invokeMethod('keepScreenOn', {
+        'keepOn': keepOn,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Libera el flag que mantiene la pantalla encendida
+  /// 
+  /// Permite que la pantalla se apague normalmente según la configuración del sistema
+  Future<Map<String, dynamic>> releaseScreenOn() async {
+    try {
+      final result = await _channel.invokeMethod('releaseScreenOn');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

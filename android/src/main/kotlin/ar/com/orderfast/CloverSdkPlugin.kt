@@ -1,10 +1,14 @@
 package ar.com.orderfast
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
+import android.view.WindowManager
 import ar.com.orderfast.models.PaymentRequest
 import ar.com.orderfast.services.PaymentService
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -13,7 +17,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
  * Plugin principal de Flutter para Clover SDK
  * Maneja la comunicación entre Flutter y el SDK nativo de Clover
  */
-class CloverSdkPlugin : FlutterPlugin, MethodCallHandler {
+class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     companion object {
         private const val TAG = "CloverSdkPlugin"
@@ -22,6 +26,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler {
 
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
+    private var activity: Activity? = null
     private var paymentService: PaymentService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -39,6 +44,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler {
                 "initialize" -> initialize(call, result)
                 "sale" -> sale(call, result)
                 "dispose" -> dispose(result)
+                "keepScreenOn" -> keepScreenOn(call, result)
+                "releaseScreenOn" -> releaseScreenOn(result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -133,9 +140,72 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler {
         }
     }
 
+    private fun keepScreenOn(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val keepOn = call.argument<Boolean>("keepOn") ?: true
+
+            activity?.runOnUiThread {
+                if (keepOn) {
+                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    Log.d(TAG, "Pantalla configurada para mantenerse encendida")
+                } else {
+                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    Log.d(TAG, "Flag de mantener pantalla encendida removido")
+                }
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to if (keepOn) "Pantalla configurada para mantenerse encendida" else "Flag removido"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al configurar keep screen on", e)
+            result.error("KEEP_SCREEN_ON_ERROR", e.message, null)
+        }
+    }
+
+    private fun releaseScreenOn(result: MethodChannel.Result) {
+        try {
+            activity?.runOnUiThread {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                Log.d(TAG, "Flag de mantener pantalla encendida removido")
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Flag removido correctamente"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al remover keep screen on", e)
+            result.error("RELEASE_SCREEN_ON_ERROR", e.message, null)
+        }
+    }
+
+    // ActivityAware methods
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
+        Log.d(TAG, "Activity attached")
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+        Log.d(TAG, "Activity detached for config changes")
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+        Log.d(TAG, "Activity reattached for config changes")
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
+        Log.d(TAG, "Activity detached")
+    }
+
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         paymentService?.dispose()
         paymentService = null
+        activity = null
         channel.setMethodCallHandler(null)
         Log.d(TAG, "Plugin detached from engine")
     }

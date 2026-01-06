@@ -71,7 +71,11 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         _status = 'Error al inicializar: ${result['error']}';
       });
+      return;
     }
+    
+    // Mantener la pantalla encendida (útil para aplicaciones POS)
+    await _cloverSdk.keepScreenOn(keepOn: true);
   }
 
   Future<void> _processPayment(double amount) async {

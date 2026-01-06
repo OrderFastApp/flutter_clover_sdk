@@ -1,9 +1,12 @@
 package ar.com.orderfast
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -34,6 +37,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var activity: Activity? = null
     private var paymentService: PaymentService? = null
     private var immersiveModeActive = false
+    private var kioskModeActive = false
+    private var unlockCode: String? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -54,6 +59,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "releaseScreenOn" -> releaseScreenOn(result)
                 "setImmersiveMode" -> setImmersiveMode(call, result)
                 "exitImmersiveMode" -> exitImmersiveMode(result)
+                "enableKioskMode" -> enableKioskMode(call, result)
+                "disableKioskMode" -> disableKioskMode(call, result)
+                "isKioskModeActive" -> isKioskModeActive(result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -296,6 +304,125 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         } catch (e: Exception) {
             Log.e(TAG, "Error al desactivar modo inmersivo", e)
             result.error("EXIT_IMMERSIVE_MODE_ERROR", e.message, null)
+        }
+    }
+
+    private fun enableKioskMode(call: MethodCall, result: MethodChannel.Result) {
+        try {
+
+            unlockCode = call.argument<String>("unlockCode")
+            val enableScreenPinning = call.argument<Boolean>("enableScreenPinning") ?: true
+
+            activity?.runOnUiThread {
+                try {
+                    if (enableScreenPinning) {
+                        // Intentar activar lock task mode
+                        try {
+                            activity?.startLockTask()
+                            kioskModeActive = true
+                            Log.d(TAG, "Modo kiosco activado (Lock Task Mode)")
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "No se pudo activar Lock Task Mode. Puede requerir configuración adicional.", e)
+                            // Continuar con otras medidas de bloqueo
+                        }
+                    }
+
+                    // Bloquear botones del sistema
+                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+                    activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+                    
+                    kioskModeActive = true
+                    Log.d(TAG, "Modo kiosco activado")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al activar modo kiosco", e)
+                    throw e
+                }
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Modo kiosco activado. Para desactivar, usa disableKioskMode con el código de desbloqueo."
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al activar modo kiosco", e)
+            result.error("KIOSK_MODE_ERROR", e.message, null)
+        }
+    }
+
+    private fun disableKioskMode(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val providedCode = call.argument<String>("unlockCode")
+
+            // Verificar código de desbloqueo si fue configurado
+            if (unlockCode != null && unlockCode != providedCode) {
+                result.error("INVALID_CODE", "Código de desbloqueo incorrecto", null)
+                return
+            }
+
+            activity?.runOnUiThread {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        // Desactivar Lock Task Mode
+                        try {
+                            activity?.stopLockTask()
+                            Log.d(TAG, "Lock Task Mode desactivado")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error al desactivar Lock Task Mode", e)
+                        }
+                    }
+
+                    // Restaurar flags de ventana
+                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+                    activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+
+                    kioskModeActive = false
+                    unlockCode = null
+                    Log.d(TAG, "Modo kiosco desactivado")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al desactivar modo kiosco", e)
+                    throw e
+                }
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Modo kiosco desactivado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al desactivar modo kiosco", e)
+            result.error("DISABLE_KIOSK_MODE_ERROR", e.message, null)
+        }
+    }
+
+    private fun isKioskModeActive(result: MethodChannel.Result) {
+        try {
+            val isActive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                activityManager.isInLockTaskMode
+            } else {
+                kioskModeActive
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "isActive" to isActive
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al verificar estado del modo kiosco", e)
+            result.error("KIOSK_MODE_CHECK_ERROR", e.message, null)
+        }
+    }
+
+    // Método para verificar si se debe bloquear una tecla (llamado desde MainActivity)
+    fun shouldBlockKey(keyCode: Int): Boolean {
+        if (!kioskModeActive) return false
+
+        // Bloquear botones del sistema en modo kiosco
+        return when (keyCode) {
+            KeyEvent.KEYCODE_HOME,
+            KeyEvent.KEYCODE_APP_SWITCH,
+            KeyEvent.KEYCODE_MENU -> true
+            else -> false
         }
     }
 

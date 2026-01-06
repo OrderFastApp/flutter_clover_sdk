@@ -170,6 +170,30 @@ await cloverSdk.setImmersiveMode(
 await cloverSdk.exitImmersiveMode();
 ```
 
+### 7. Modo Kiosco - Bloquear el sistema (Opcional)
+
+```dart
+// Activar modo kiosco con código de desbloqueo
+await cloverSdk.enableKioskMode(
+  unlockCode: 'MI_CODIGO_SECRETO',
+  enableScreenPinning: true,
+);
+
+// Verificar si el modo kiosco está activo
+final status = await cloverSdk.isKioskModeActive();
+print('Modo kiosco activo: ${status['isActive']}');
+
+// Desactivar modo kiosco (requiere el código de desbloqueo)
+await cloverSdk.disableKioskMode(unlockCode: 'MI_CODIGO_SECRETO');
+```
+
+**⚠️ IMPORTANTE sobre el Modo Kiosco:**
+- Bloquea los botones HOME, RECENT APPS, MENU y BACK
+- Requiere Android 5.0+ (API 21+)
+- En algunos dispositivos puede requerir que la app sea configurada como administrador del dispositivo
+- Para salir del modo kiosco, debes llamar a `disableKioskMode()` con el código correcto
+- Recomendado para aplicaciones POS/kiosco donde necesitas control total
+
 ### 6. Procesar un pago
 
 ```dart
@@ -434,6 +458,45 @@ Desactiva el modo inmersivo y restaura las barras del sistema (estado y navegaci
 **Retorna:** `Future<Map<String, dynamic>>` con:
 - `success`: `true` si se desactivó correctamente
 - `message`: Mensaje descriptivo
+
+### `enableKioskMode({String? unlockCode, bool enableScreenPinning = true})`
+
+Activa el modo kiosco para bloquear el sistema y prevenir que se salga de la app.
+
+**Parámetros:**
+- `unlockCode` (opcional): Código requerido para desactivar el modo kiosco (altamente recomendado)
+- `enableScreenPinning` (opcional): Si es `true`, activa Screen Pinning/Lock Task Mode (por defecto: `true`)
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se activó correctamente
+- `message`: Mensaje descriptivo
+
+**Características:**
+- Bloquea los botones HOME, RECENT APPS, MENU y BACK
+- Previene que se abran otras aplicaciones
+- Requiere Android 5.0+ (API 21+)
+- En algunos dispositivos puede requerir configuración adicional del administrador del dispositivo
+
+**⚠️ ADVERTENCIA:** Una vez activado, solo puedes salir llamando a `disableKioskMode()` con el código correcto. Asegúrate de tener una forma de desactivarlo.
+
+### `disableKioskMode({String? unlockCode})`
+
+Desactiva el modo kiosco y restaura la funcionalidad normal del sistema.
+
+**Parámetros:**
+- `unlockCode` (opcional): Código de desbloqueo (requerido si se configuró al activar)
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se desactivó correctamente
+- `message`: Mensaje descriptivo
+
+### `isKioskModeActive()`
+
+Verifica si el modo kiosco está actualmente activo.
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si la verificación fue exitosa
+- `isActive`: `true` si el modo kiosco está activo, `false` en caso contrario
 
 ## 🔔 Callbacks
 

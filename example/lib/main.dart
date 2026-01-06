@@ -28,8 +28,8 @@ class _MyAppState extends State<MyApp> {
   void _setupCallbacks() {
     _cloverSdk.onInitialized = (response) {
       setState(() {
-        _status = response['success'] == true 
-            ? 'SDK Inicializado' 
+        _status = response['success'] == true
+            ? 'SDK Inicializado'
             : 'Error al inicializar: ${response['error']}';
       });
     };
@@ -66,22 +66,29 @@ class _MyAppState extends State<MyApp> {
     final result = await _cloverSdk.initialize(
       remoteApplicationId: 'TU_RAID_AQUI', // Reemplaza con tu RAID
     );
-    
+
     if (result['success'] != true) {
       setState(() {
         _status = 'Error al inicializar: ${result['error']}';
       });
       return;
     }
-    
+
     // Mantener la pantalla encendida (útil para aplicaciones POS)
     await _cloverSdk.keepScreenOn(keepOn: true);
-    
+
     // Activar modo inmersivo para ocultar barras del sistema (opcional)
     await _cloverSdk.setImmersiveMode(
       hideStatusBar: true,
       hideNavigationBar: true,
     );
+
+    // Activar modo kiosco para bloquear el sistema (opcional)
+    // IMPORTANTE: Solo descomenta esto si necesitas bloquear completamente el sistema
+    // await _cloverSdk.enableKioskMode(
+    //   unlockCode: 'MI_CODIGO_SECRETO',
+    //   enableScreenPinning: true,
+    // );
   }
 
   Future<void> _processPayment(double amount) async {
@@ -94,7 +101,7 @@ class _MyAppState extends State<MyApp> {
 
     final amountInCents = (amount * 100).toInt();
     final externalId = 'order_${DateTime.now().millisecondsSinceEpoch}';
-    
+
     setState(() {
       _status = 'Procesando pago de \$${amount.toStringAsFixed(2)}...';
     });

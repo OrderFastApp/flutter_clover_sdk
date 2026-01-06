@@ -148,4 +148,57 @@ class CloverSdkPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  /// Activa el modo kiosco para bloquear el sistema y prevenir que se salga de la app
+  /// 
+  /// [unlockCode] - Código opcional requerido para desactivar el modo kiosco (recomendado)
+  /// [enableScreenPinning] - Si es true, activa Screen Pinning/Lock Task Mode (por defecto: true)
+  /// 
+  /// **IMPORTANTE:** 
+  /// - Bloquea los botones HOME, RECENT APPS, MENU y BACK
+  /// - Requiere Android 5.0+ (API 21+)
+  /// - Para desactivar, usa disableKioskMode() con el código de desbloqueo
+  /// - En algunos dispositivos puede requerir configuración adicional del administrador del dispositivo
+  Future<Map<String, dynamic>> enableKioskMode({
+    String? unlockCode,
+    bool enableScreenPinning = true,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('enableKioskMode', {
+        'unlockCode': unlockCode,
+        'enableScreenPinning': enableScreenPinning,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Desactiva el modo kiosco
+  /// 
+  /// [unlockCode] - Código de desbloqueo (requerido si se configuró al activar)
+  /// 
+  /// Restaura la funcionalidad normal del sistema y permite salir de la app
+  Future<Map<String, dynamic>> disableKioskMode({String? unlockCode}) async {
+    try {
+      final result = await _channel.invokeMethod('disableKioskMode', {
+        'unlockCode': unlockCode,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Verifica si el modo kiosco está activo
+  /// 
+  /// Retorna true si el modo kiosco está activo, false en caso contrario
+  Future<Map<String, dynamic>> isKioskModeActive() async {
+    try {
+      final result = await _channel.invokeMethod('isKioskModeActive');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

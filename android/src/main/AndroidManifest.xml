@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="ar.com.orderfast">
+  
+  <!-- Permisos necesarios para el SDK de Clover -->
+  <uses-permission android:name="com.clover.permission.LAUNCH_PAYMENTS" />
+  <uses-permission android:name="com.clover.permission.READ_MERCHANT" />
+  
+</manifest>

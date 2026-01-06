@@ -89,7 +89,10 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     private fun sale(call: MethodCall, result: MethodChannel.Result) {
-        val amount = call.argument<Long>("amount") ?: run {
+        // Flutter envía int como Integer, necesitamos convertirlo a Long
+        val amountInt = call.argument<Int>("amount")
+        val amountLong = call.argument<Long>("amount")
+        val amount = amountLong ?: amountInt?.toLong() ?: run {
             result.error("MISSING_AMOUNT", "El monto es requerido", null)
             return
         }

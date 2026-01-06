@@ -2,9 +2,13 @@ package ar.com.orderfast
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import android.view.View
+import android.view.WindowInsetsController
 import android.view.WindowManager
-import ar.com.orderfast.models.PaymentRequest
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import ar.com.orderfast.services.PaymentService
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -28,6 +32,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var context: Context
     private var activity: Activity? = null
     private var paymentService: PaymentService? = null
+    private var immersiveModeActive = false
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -46,6 +51,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "dispose" -> dispose(result)
                 "keepScreenOn" -> keepScreenOn(call, result)
                 "releaseScreenOn" -> releaseScreenOn(result)
+                "setImmersiveMode" -> setImmersiveMode(call, result)
+                "exitImmersiveMode" -> exitImmersiveMode(result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -178,6 +185,116 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         } catch (e: Exception) {
             Log.e(TAG, "Error al remover keep screen on", e)
             result.error("RELEASE_SCREEN_ON_ERROR", e.message, null)
+        }
+    }
+
+    private fun setImmersiveMode(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val hideStatusBar = call.argument<Boolean>("hideStatusBar") ?: true
+            val hideNavigationBar = call.argument<Boolean>("hideNavigationBar") ?: true
+
+            activity?.runOnUiThread {
+                val window = activity?.window ?: return@runOnUiThread
+                val decorView = window.decorView
+
+                // Habilitar edge-to-edge
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // Android 11+ (API 30+)
+                    val controller = window.insetsController
+                    if (controller != null) {
+                        var typesToHide = 0
+
+                        if (hideStatusBar) {
+                            typesToHide = typesToHide or WindowInsetsCompat.Type.statusBars()
+                        }
+
+                        if (hideNavigationBar) {
+                            typesToHide = typesToHide or WindowInsetsCompat.Type.navigationBars()
+                        }
+
+                        if (typesToHide != 0) {
+                            controller.hide(typesToHide)
+                            // Mantener el modo inmersivo sticky
+                            controller.systemBarsBehavior =
+                                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        }
+                    }
+                } else {
+                    // Android 10 y anteriores
+                    @Suppress("DEPRECATION")
+                    var flags = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+
+                    if (hideStatusBar) {
+                        @Suppress("DEPRECATION")
+                        flags = flags or View.SYSTEM_UI_FLAG_FULLSCREEN
+                    }
+
+                    if (hideNavigationBar) {
+                        @Suppress("DEPRECATION")
+                        flags = flags or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    }
+
+                    // Modo inmersivo sticky
+                    @Suppress("DEPRECATION")
+                    flags = flags or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+
+                    @Suppress("DEPRECATION")
+                    decorView.systemUiVisibility = flags
+                }
+
+                immersiveModeActive = true
+
+                Log.d(TAG, "Modo inmersivo activado: statusBar=$hideStatusBar, navigationBar=$hideNavigationBar")
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Modo inmersivo activado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al activar modo inmersivo", e)
+            result.error("IMMERSIVE_MODE_ERROR", e.message, null)
+        }
+    }
+
+    private fun exitImmersiveMode(result: MethodChannel.Result) {
+        try {
+            activity?.runOnUiThread {
+                val window = activity?.window ?: return@runOnUiThread
+                val decorView = window.decorView
+
+                immersiveModeActive = false
+
+                // Deshabilitar edge-to-edge
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // Android 11+ (API 30+)
+                    val controller = window.insetsController
+                    if (controller != null) {
+                        controller.show(WindowInsetsCompat.Type.statusBars())
+                        controller.show(WindowInsetsCompat.Type.navigationBars())
+                    }
+                } else {
+                    // Android 10 y anteriores
+                    @Suppress("DEPRECATION")
+                    decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                }
+
+                Log.d(TAG, "Modo inmersivo desactivado")
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Modo inmersivo desactivado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al desactivar modo inmersivo", e)
+            result.error("EXIT_IMMERSIVE_MODE_ERROR", e.message, null)
         }
     }
 

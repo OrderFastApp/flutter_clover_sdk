@@ -114,4 +114,38 @@ class CloverSdkPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  /// Activa el modo inmersivo para ocultar la barra de estado y/o navegación
+  /// 
+  /// [hideStatusBar] - Si es true, oculta la barra de estado (por defecto: true)
+  /// [hideNavigationBar] - Si es true, oculta la barra de navegación (por defecto: true)
+  /// 
+  /// El modo inmersivo oculta las barras del sistema y las muestra temporalmente
+  /// cuando el usuario desliza desde los bordes. Útil para aplicaciones kiosco/POS.
+  Future<Map<String, dynamic>> setImmersiveMode({
+    bool hideStatusBar = true,
+    bool hideNavigationBar = true,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('setImmersiveMode', {
+        'hideStatusBar': hideStatusBar,
+        'hideNavigationBar': hideNavigationBar,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Desactiva el modo inmersivo y muestra las barras del sistema
+  /// 
+  /// Restaura la barra de estado y la barra de navegación a su estado normal
+  Future<Map<String, dynamic>> exitImmersiveMode() async {
+    try {
+      final result = await _channel.invokeMethod('exitImmersiveMode');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

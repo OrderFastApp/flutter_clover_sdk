@@ -76,6 +76,12 @@ class _MyAppState extends State<MyApp> {
     
     // Mantener la pantalla encendida (útil para aplicaciones POS)
     await _cloverSdk.keepScreenOn(keepOn: true);
+    
+    // Activar modo inmersivo para ocultar barras del sistema (opcional)
+    await _cloverSdk.setImmersiveMode(
+      hideStatusBar: true,
+      hideNavigationBar: true,
+    );
   }
 
   Future<void> _processPayment(double amount) async {

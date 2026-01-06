@@ -151,6 +151,25 @@ await cloverSdk.keepScreenOn(keepOn: true);
 await cloverSdk.releaseScreenOn();
 ```
 
+### 6. Modo Inmersivo - Ocultar barras del sistema (Opcional)
+
+```dart
+// Ocultar barra de estado y barra de navegación (modo kiosco)
+await cloverSdk.setImmersiveMode(
+  hideStatusBar: true,
+  hideNavigationBar: true,
+);
+
+// O solo ocultar la barra de estado
+await cloverSdk.setImmersiveMode(
+  hideStatusBar: true,
+  hideNavigationBar: false,
+);
+
+// Restaurar las barras del sistema
+await cloverSdk.exitImmersiveMode();
+```
+
 ### 6. Procesar un pago
 
 ```dart
@@ -389,6 +408,32 @@ Libera el flag que mantiene la pantalla encendida, permitiendo que la pantalla s
 
 **Retorna:** `Future<Map<String, dynamic>>` con:
 - `success`: `true` si se liberó correctamente
+
+### `setImmersiveMode({bool hideStatusBar = true, bool hideNavigationBar = true})`
+
+Activa el modo inmersivo para ocultar la barra de estado y/o la barra de navegación.
+
+**Parámetros:**
+- `hideStatusBar` (opcional): Si es `true`, oculta la barra de estado (por defecto: `true`)
+- `hideNavigationBar` (opcional): Si es `true`, oculta la barra de navegación (por defecto: `true`)
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se configuró correctamente
+- `message`: Mensaje descriptivo
+
+**Nota:** 
+- El modo inmersivo oculta las barras del sistema permanentemente
+- Las barras se muestran temporalmente cuando el usuario desliza desde los bordes
+- Útil para aplicaciones kiosco/POS donde necesitas pantalla completa
+- Compatible con Android 5.0+ (API 21+)
+
+### `exitImmersiveMode()`
+
+Desactiva el modo inmersivo y restaura las barras del sistema (estado y navegación) a su estado normal.
+
+**Retorna:** `Future<Map<String, dynamic>>` con:
+- `success`: `true` si se desactivó correctamente
+- `message`: Mensaje descriptivo
 
 ## 🔔 Callbacks
 

@@ -23,7 +23,7 @@ object PaymentMapper {
     fun toPaymentInfo(payment: Payment): PaymentInfo {
         return PaymentInfo(
             id = payment.id,
-            orderId = payment.orderId,
+            orderId = payment.externalReferenceId,
             externalPaymentId = payment.externalPaymentId,
             amount = payment.amount,
             tipAmount = payment.tipAmount,

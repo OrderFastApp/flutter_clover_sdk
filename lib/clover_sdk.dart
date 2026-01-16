@@ -188,14 +188,14 @@ class CloverSdkPlugin {
   }
 
   /// Presenta un código QR para que el cliente escanee y realice el pago
-  ///
+  /// 
   /// [amount] - Monto del pago en centavos (ej. 1000 para $10.00)
   /// [externalId] - ID externo único para la transacción
   /// [orderId] - ID de la orden en Clover (opcional)
-  ///
+  /// 
   /// Muestra un código QR en la pantalla del dispositivo Clover que el cliente
   /// puede escanear con su app de pago (Mercado Pago, PayPal, etc.) para realizar el pago.
-  ///
+  /// 
   /// La respuesta del pago llegará en el callback `onQrPaymentResponse`.
   Future<Map<String, dynamic>> presentQrCode({
     required int amount,
@@ -208,6 +208,101 @@ class CloverSdkPlugin {
         'externalId': externalId,
         if (orderId != null) 'orderId': orderId,
       });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Habilita el screensaver/standby
+  /// 
+  /// [activateOnSleep] - Si es true, el screensaver se activa cuando el dispositivo duerme (por defecto: true)
+  /// [dreamComponentPackage] - Nombre del paquete del DreamService personalizado (opcional)
+  /// [dreamComponentClass] - Nombre de la clase del DreamService personalizado (opcional)
+  /// 
+  /// El screensaver se mostrará cuando el dispositivo entre en modo standby o cuando
+  /// se llame manualmente a `startScreensaver()`.
+  Future<Map<String, dynamic>> enableScreensaver({
+    bool activateOnSleep = true,
+    String? dreamComponentPackage,
+    String? dreamComponentClass,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('enableScreensaver', {
+        'activateOnSleep': activateOnSleep,
+        if (dreamComponentPackage != null) 'dreamComponentPackage': dreamComponentPackage,
+        if (dreamComponentClass != null) 'dreamComponentClass': dreamComponentClass,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Deshabilita el screensaver/standby
+  Future<Map<String, dynamic>> disableScreensaver() async {
+    try {
+      final result = await _channel.invokeMethod('disableScreensaver');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Inicia el screensaver manualmente
+  /// 
+  /// Activa el screensaver inmediatamente sin esperar a que el dispositivo entre en modo standby.
+  Future<Map<String, dynamic>> startScreensaver() async {
+    try {
+      final result = await _channel.invokeMethod('startScreensaver');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Configura el componente DreamService a usar como screensaver
+  /// 
+  /// [packageName] - Nombre del paquete del DreamService
+  /// [className] - Nombre completo de la clase del DreamService (incluyendo el paquete)
+  /// 
+  /// Esto permite usar un DreamService personalizado para mostrar contenido personalizado
+  /// en el screensaver.
+  Future<Map<String, dynamic>> setScreensaverDreamComponent({
+    required String packageName,
+    required String className,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('setScreensaverDreamComponent', {
+        'packageName': packageName,
+        'className': className,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Verifica si el screensaver está habilitado
+  /// 
+  /// Retorna información sobre el estado del screensaver:
+  /// - `isEnabled`: Si el screensaver está habilitado
+  /// - `activateOnSleep`: Si se activa cuando el dispositivo duerme
+  Future<Map<String, dynamic>> isScreensaverEnabled() async {
+    try {
+      final result = await _channel.invokeMethod('isScreensaverEnabled');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Verifica si el screensaver está soportado en este dispositivo
+  /// 
+  /// Retorna `isSupported`: true si el dispositivo soporta screensaver, false en caso contrario
+  Future<Map<String, dynamic>> isScreensaverSupported() async {
+    try {
+      final result = await _channel.invokeMethod('isScreensaverSupported');
       return Map<String, dynamic>.from(result);
     } catch (e) {
       return {'success': false, 'error': e.toString()};

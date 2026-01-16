@@ -11,6 +11,8 @@ import ar.com.orderfast.services.PaymentService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
 import ar.com.orderfast.services.QrPaymentService
+import ar.com.orderfast.services.ScreensaverService
+import android.content.ComponentName
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -36,6 +38,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var qrPaymentService: QrPaymentService? = null
     private var kioskService: KioskService? = null
     private var immersiveModeService: ImmersiveModeService? = null
+    private var screensaverService: ScreensaverService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -60,6 +63,12 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "disableKioskMode" -> disableKioskMode(call, result)
                 "isKioskModeActive" -> isKioskModeActive(result)
                 "presentQrCode" -> presentQrCode(call, result)
+                "enableScreensaver" -> enableScreensaver(call, result)
+                "disableScreensaver" -> disableScreensaver(result)
+                "startScreensaver" -> startScreensaver(result)
+                "setScreensaverDreamComponent" -> setScreensaverDreamComponent(call, result)
+                "isScreensaverEnabled" -> isScreensaverEnabled(result)
+                "isScreensaverSupported" -> isScreensaverSupported(result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -99,6 +108,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
             // Inicializar el servicio de pagos QR
             qrPaymentService = QrPaymentService(context)
+
+            // Inicializar el servicio de screensaver
+            screensaverService = ScreensaverService(context)
 
             val response = mapOf(
                 "success" to true,
@@ -390,6 +402,150 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
+    private fun enableScreensaver(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            if (!screensaverService.isSupported()) {
+                result.error("NOT_SUPPORTED", "El screensaver no está soportado en este dispositivo", null)
+                return
+            }
+
+            val activateOnSleep = call.argument<Boolean>("activateOnSleep") ?: true
+            val dreamComponentPackage = call.argument<String>("dreamComponentPackage")
+            val dreamComponentClass = call.argument<String>("dreamComponentClass")
+
+            screensaverService.setEnabled(true)
+            screensaverService.setActivateOnSleep(activateOnSleep)
+
+            // Si se proporciona un componente DreamService, configurarlo
+            if (dreamComponentPackage != null && dreamComponentClass != null) {
+                val componentName = ComponentName(dreamComponentPackage, dreamComponentClass)
+                screensaverService.setDreamComponent(componentName)
+            }
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Screensaver habilitado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al habilitar screensaver", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
+    private fun disableScreensaver(result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            screensaverService.setEnabled(false)
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Screensaver deshabilitado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al deshabilitar screensaver", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
+    private fun startScreensaver(result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            if (!screensaverService.isSupported()) {
+                result.error("NOT_SUPPORTED", "El screensaver no está soportado en este dispositivo", null)
+                return
+            }
+
+            screensaverService.start()
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Screensaver iniciado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al iniciar screensaver", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
+    private fun setScreensaverDreamComponent(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            val packageName = call.argument<String>("packageName") ?: run {
+                result.error("MISSING_PACKAGE", "El packageName es requerido", null)
+                return
+            }
+
+            val className = call.argument<String>("className") ?: run {
+                result.error("MISSING_CLASS", "El className es requerido", null)
+                return
+            }
+
+            val componentName = ComponentName(packageName, className)
+            screensaverService.setDreamComponent(componentName)
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Dream component configurado"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al configurar dream component", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
+    private fun isScreensaverEnabled(result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            val isEnabled = screensaverService.isEnabled()
+            val activateOnSleep = screensaverService.isActivateOnSleep()
+
+            result.success(mapOf(
+                "success" to true,
+                "isEnabled" to isEnabled,
+                "activateOnSleep" to activateOnSleep
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al verificar estado del screensaver", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
+    private fun isScreensaverSupported(result: MethodChannel.Result) {
+        try {
+            val screensaverService = this.screensaverService ?: ScreensaverService(context)
+            val isSupported = screensaverService.isSupported()
+
+            result.success(mapOf(
+                "success" to true,
+                "isSupported" to isSupported
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al verificar soporte del screensaver", e)
+            result.error("SCREENSAVER_ERROR", e.message, null)
+        }
+    }
+
     // ActivityAware methods
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
@@ -421,6 +577,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         kioskService = null
         immersiveModeService?.dispose()
         immersiveModeService = null
+        screensaverService = null
         activity = null
         channel.setMethodCallHandler(null)
         Log.d(TAG, "Plugin detached from engine")

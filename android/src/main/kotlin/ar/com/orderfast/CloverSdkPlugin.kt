@@ -7,11 +7,17 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import ar.com.orderfast.models.PaymentRequest
 import ar.com.orderfast.models.QrPaymentRequest
+import ar.com.orderfast.models.NonFiscalTicket
+import ar.com.orderfast.models.FiscalTicket
+import ar.com.orderfast.models.TicketItem
+import ar.com.orderfast.models.TicketSubselection
+import ar.com.orderfast.models.FiscalInfo
 import ar.com.orderfast.services.PaymentService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
 import ar.com.orderfast.services.QrPaymentService
 import ar.com.orderfast.services.ScreensaverService
+import ar.com.orderfast.services.PrintService
 import android.content.ComponentName
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -39,6 +45,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var kioskService: KioskService? = null
     private var immersiveModeService: ImmersiveModeService? = null
     private var screensaverService: ScreensaverService? = null
+    private var printService: PrintService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -69,6 +76,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "setScreensaverDreamComponent" -> setScreensaverDreamComponent(call, result)
                 "isScreensaverEnabled" -> isScreensaverEnabled(result)
                 "isScreensaverSupported" -> isScreensaverSupported(result)
+                "printTicket" -> printTicket(call, result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -544,6 +552,155 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             Log.e(TAG, "Error al verificar soporte del screensaver", e)
             result.error("SCREENSAVER_ERROR", e.message, null)
         }
+    }
+
+    private fun printTicket(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            // Crear o obtener el servicio de impresión
+            if (printService == null) {
+                printService = PrintService(context)
+            }
+
+            val nonFiscalData = call.argument<Map<String, Any>>("nonFiscalTicket")
+            val fiscalData = call.argument<Map<String, Any>>("fiscalTicket")
+
+            when {
+                nonFiscalData != null -> {
+                    val ticket = parseNonFiscalTicket(nonFiscalData)
+                    printService?.printNonFiscalTicket(ticket) { response ->
+                        if (response.success) {
+                            result.success(mapOf(
+                                "success" to true,
+                                "message" to response.message
+                            ))
+                        } else {
+                            result.error("PRINT_ERROR", response.error, null)
+                        }
+                    }
+                }
+                fiscalData != null -> {
+                    val ticket = parseFiscalTicket(fiscalData)
+                    printService?.printFiscalTicket(ticket) { response ->
+                        if (response.success) {
+                            result.success(mapOf(
+                                "success" to true,
+                                "message" to response.message
+                            ))
+                        } else {
+                            result.error("PRINT_ERROR", response.error, null)
+                        }
+                    }
+                }
+                else -> {
+                    result.error("MISSING_TICKET", "Debe proporcionar nonFiscalTicket o fiscalTicket", null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al imprimir ticket", e)
+            result.error("PRINT_ERROR", e.message, null)
+        }
+    }
+
+    private fun parseNonFiscalTicket(data: Map<String, Any>): NonFiscalTicket {
+        val orderNumber = data["orderNumber"] as? String ?: ""
+        val dateTime = data["dateTime"] as? String ?: ""
+        val total = (data["total"] as? Number)?.toDouble() ?: 0.0
+        val disclaimer = data["disclaimer"] as? String
+        val isTakeAway = data["isTakeAway"] as? Boolean
+        val identifier = data["identifier"] as? String
+
+        val itemsData = data["items"] as? List<Map<String, Any>> ?: emptyList()
+        val items = itemsData.map { itemData ->
+            val subselectionsData = itemData["subselections"] as? List<Map<String, Any>>
+            val subselections = subselectionsData?.map { subData ->
+                TicketSubselection(
+                    name = subData["name"] as? String ?: "",
+                    quantity = (subData["quantity"] as? Number)?.toInt() ?: 0,
+                    price = (subData["price"] as? Number)?.toDouble() ?: 0.0,
+                    total = (subData["total"] as? Number)?.toDouble() ?: 0.0
+                )
+            }
+
+            TicketItem(
+                quantity = (itemData["quantity"] as? Number)?.toInt() ?: 0,
+                description = itemData["description"] as? String ?: "",
+                subtotal = (itemData["subtotal"] as? Number)?.toDouble() ?: 0.0,
+                total = (itemData["total"] as? Number)?.toDouble() ?: 0.0,
+                comment = itemData["comment"] as? String,
+                subselections = subselections
+            )
+        }
+
+        return NonFiscalTicket(
+            orderNumber = orderNumber,
+            items = items,
+            total = total,
+            dateTime = dateTime,
+            isTakeAway = isTakeAway,
+            identifier = identifier,
+            disclaimer = disclaimer
+        )
+    }
+
+    private fun parseFiscalTicket(data: Map<String, Any>): FiscalTicket {
+        val orderNumber = data["orderNumber"] as? String
+        val dateTime = data["dateTime"] as? String ?: ""
+        val total = (data["total"] as? Number)?.toDouble() ?: 0.0
+        val tipoComprobante = data["tipoComprobante"] as? String
+
+        val itemsData = data["items"] as? List<Map<String, Any>> ?: emptyList()
+        val items = itemsData.map { itemData ->
+            val subselectionsData = itemData["subselections"] as? List<Map<String, Any>>
+            val subselections = subselectionsData?.map { subData ->
+                TicketSubselection(
+                    name = subData["name"] as? String ?: "",
+                    quantity = (subData["quantity"] as? Number)?.toInt() ?: 0,
+                    price = (subData["price"] as? Number)?.toDouble() ?: 0.0,
+                    total = (subData["total"] as? Number)?.toDouble() ?: 0.0
+                )
+            }
+
+            TicketItem(
+                quantity = (itemData["quantity"] as? Number)?.toInt() ?: 0,
+                description = itemData["description"] as? String ?: "",
+                subtotal = (itemData["subtotal"] as? Number)?.toDouble() ?: 0.0,
+                total = (itemData["total"] as? Number)?.toDouble() ?: 0.0,
+                comment = itemData["comment"] as? String,
+                subselections = subselections
+            )
+        }
+
+        val fiscalInfoData = data["fiscalInfo"] as? Map<String, Any>
+            ?: throw IllegalArgumentException("fiscalInfo es requerido para tickets fiscales")
+
+        val fiscalInfo = FiscalInfo(
+            razonSocial = fiscalInfoData["razonSocial"] as? String ?: "",
+            cuit = fiscalInfoData["cuit"] as? String ?: "",
+            direccion = fiscalInfoData["direccion"] as? String ?: "",
+            localidad = fiscalInfoData["localidad"] as? String ?: "",
+            numeroInscripcionIIBB = fiscalInfoData["numeroInscripcionIIBB"] as? String ?: "",
+            responsable = fiscalInfoData["responsable"] as? String ?: "",
+            inicioActividades = fiscalInfoData["inicioActividades"] as? String ?: "",
+            fecha = fiscalInfoData["fecha"] as? String ?: "",
+            numeroT = fiscalInfoData["numeroT"] as? String ?: "",
+            puntoVenta = fiscalInfoData["puntoVenta"] as? String ?: "",
+            consumidorFinal = fiscalInfoData["consumidorFinal"] as? Boolean ?: true,
+            regimenFiscal = fiscalInfoData["regimenFiscal"] as? String,
+            ivaContenido = (fiscalInfoData["ivaContenido"] as? Number)?.toDouble(),
+            otrosImpuestosNacionales = (fiscalInfoData["otrosImpuestosNacionales"] as? Number)?.toDouble(),
+            cae = fiscalInfoData["cae"] as? String,
+            fechaVencimiento = fiscalInfoData["fechaVencimiento"] as? String,
+            qrCodeData = fiscalInfoData["qrCodeData"] as? String
+        )
+
+        return FiscalTicket(
+            orderNumber = orderNumber,
+            items = items,
+            total = total,
+            dateTime = dateTime,
+            fiscalInfo = fiscalInfo,
+            tipoComprobante = tipoComprobante
+        )
     }
 
     // ActivityAware methods

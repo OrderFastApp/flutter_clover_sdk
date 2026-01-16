@@ -1,6 +1,6 @@
 name: clover_sdk
 description: "Clover SDK for Flutter applications."
-version: 0.4.6
+version: 0.4.7
 homepage: "https://github.com/OrderFastApp/flutter_clover_sdk"
 
 environment:
@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  intl: ^0.20.2
   plugin_platform_interface: ^2.0.2
 
 dev_dependencies:

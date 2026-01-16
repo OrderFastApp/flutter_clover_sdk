@@ -14,9 +14,6 @@ import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
-import com.clover.sdk.v1.printer.Category
-import com.clover.sdk.v1.printer.Printer
-import com.clover.sdk.v1.printer.PrinterConnector
 import com.clover.sdk.v1.printer.job.ViewPrintJob
 
 import java.text.NumberFormat
@@ -51,9 +48,11 @@ class PrintService(private val context: Context) {
                     return
                 }
 
-            val printerWidth = getPrinterWidth(account) ?: DEFAULT_PRINTER_WIDTH
+            // Usar ancho por defecto para papel de 80mm (576 puntos)
+            // El ViewPrintJob ajustará automáticamente el layout
+            val printerWidth = DEFAULT_PRINTER_WIDTH
             val view = createNonFiscalTicketView(ticket, printerWidth)
-
+            
             val printJob = ViewPrintJob.Builder()
                 .view(view, printerWidth)
                 .build()
@@ -88,9 +87,11 @@ class PrintService(private val context: Context) {
                     return
                 }
 
-            val printerWidth = getPrinterWidth(account) ?: DEFAULT_PRINTER_WIDTH
+            // Usar ancho por defecto para papel de 80mm (576 puntos)
+            // El ViewPrintJob ajustará automáticamente el layout
+            val printerWidth = DEFAULT_PRINTER_WIDTH
             val view = createFiscalTicketView(ticket, printerWidth)
-
+            
             val printJob = ViewPrintJob.Builder()
                 .view(view, printerWidth)
                 .build()
@@ -108,26 +109,6 @@ class PrintService(private val context: Context) {
                 success = false,
                 error = e.message ?: "Error desconocido al imprimir"
             ))
-        }
-    }
-
-    /**
-     * Obtiene el ancho de la impresora en puntos
-     */
-    private fun getPrinterWidth(account: Account): Int? {
-        return try {
-            val printerConnector = PrinterConnector(context, account, null)
-            val printers = printerConnector.getPrinters(Category.RECEIPT)
-            if (printers.isNotEmpty()) {
-                val preferredPrinter = printers[0]
-                val typeDetails = printerConnector.getPrinterTypeDetails(preferredPrinter)
-                typeDetails?.numDotsWidth
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error al obtener ancho de impresora", e)
-            null
         }
     }
 

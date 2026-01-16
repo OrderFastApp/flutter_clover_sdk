@@ -18,7 +18,7 @@ import com.clover.sdk.v1.printer.Category
 import com.clover.sdk.v1.printer.Printer
 import com.clover.sdk.v1.printer.PrinterConnector
 import com.clover.sdk.v1.printer.job.ViewPrintJob
-import com.clover.sdk.v3.printer.TypeDetails
+
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -32,6 +32,7 @@ class PrintService(private val context: Context) {
         // Para papel de 80mm, el ancho típico es ~576 puntos (72 puntos por pulgada * 8 pulgadas)
         // Pero usaremos el ancho real de la impresora
         private const val DEFAULT_PRINTER_WIDTH = 576 // Ancho por defecto para papel de 80mm
+        private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))

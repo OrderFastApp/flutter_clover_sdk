@@ -120,6 +120,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             // Inicializar el servicio de screensaver
             screensaverService = ScreensaverService(context)
 
+            // Inicializar el servicio de impresión
+            printService = PrintService(context)
+
             val response = mapOf(
                 "success" to true,
                 "message" to "SDK inicializado correctamente"

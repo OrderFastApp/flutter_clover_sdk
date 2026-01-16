@@ -559,9 +559,12 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private fun printTicket(call: MethodCall, result: MethodChannel.Result) {
         try {
+            // Para Flutter, usar el contexto de la Activity si está disponible, sino el ApplicationContext
+            val printContext = activity ?: context
+            
             // Crear o obtener el servicio de impresión
             if (printService == null) {
-                printService = PrintService(context)
+                printService = PrintService(printContext)
             }
 
             val nonFiscalData = call.argument<Map<String, Any>>("nonFiscalTicket")

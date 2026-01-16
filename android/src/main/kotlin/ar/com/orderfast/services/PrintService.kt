@@ -16,6 +16,8 @@ import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.ViewPrintJob
 
+import android.os.Handler
+import android.os.HandlerThread
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -33,43 +35,56 @@ class PrintService(private val context: Context) {
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
+    
+    // HandlerThread para ejecutar operaciones de impresión en segundo plano
+    private val printThread = HandlerThread("PrintThread").apply { start() }
+    private val printHandler = Handler(printThread.looper)
 
     /**
      * Imprime un ticket no fiscal
      */
     fun printNonFiscalTicket(ticket: NonFiscalTicket, callback: (PrintTicketResponse) -> Unit) {
-        try {
-            val account: Account = CloverAccount.getAccount(context)
-                ?: run {
-                    callback(PrintTicketResponse(
-                        success = false,
-                        error = "No se pudo obtener la cuenta de Clover"
-                    ))
-                    return
-                }
+        val account: Account = CloverAccount.getAccount(context)
+            ?: run {
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = "No se pudo obtener la cuenta de Clover"
+                ))
+                return
+            }
 
-            // Usar ancho por defecto para papel de 80mm (576 puntos)
-            // El ViewPrintJob ajustará automáticamente el layout
-            val printerWidth = DEFAULT_PRINTER_WIDTH
-            val view = createNonFiscalTicketView(ticket, printerWidth)
-            
-            val printJob = ViewPrintJob.Builder()
-                .view(view, printerWidth)
-                .build()
+        // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
+        printHandler.post {
+            try {
+                // Usar ancho por defecto para papel de 80mm (576 puntos)
+                // El ViewPrintJob ajustará automáticamente el layout
+                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val view = createNonFiscalTicketView(ticket, printerWidth)
+                
+                // Medir y layout el View antes de pasarlo a ViewPrintJob
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                view.measure(widthSpec, heightSpec)
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                
+                val printJob = ViewPrintJob.Builder()
+                    .view(view, printerWidth)
+                    .build()
 
-            printJob.print(context, account)
+                printJob.print(context, account)
 
-            Log.d(TAG, "Ticket no fiscal enviado a impresión: ${ticket.orderNumber}")
-            callback(PrintTicketResponse(
-                success = true,
-                message = "Ticket impreso correctamente"
-            ))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error al imprimir ticket no fiscal", e)
-            callback(PrintTicketResponse(
-                success = false,
-                error = e.message ?: "Error desconocido al imprimir"
-            ))
+                Log.d(TAG, "Ticket no fiscal enviado a impresión: ${ticket.orderNumber}")
+                callback(PrintTicketResponse(
+                    success = true,
+                    message = "Ticket impreso correctamente"
+                ))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al imprimir ticket no fiscal", e)
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = e.message ?: "Error desconocido al imprimir"
+                ))
+            }
         }
     }
 
@@ -77,38 +92,47 @@ class PrintService(private val context: Context) {
      * Imprime un ticket fiscal
      */
     fun printFiscalTicket(ticket: FiscalTicket, callback: (PrintTicketResponse) -> Unit) {
-        try {
-            val account: Account = CloverAccount.getAccount(context)
-                ?: run {
-                    callback(PrintTicketResponse(
-                        success = false,
-                        error = "No se pudo obtener la cuenta de Clover"
-                    ))
-                    return
-                }
+        val account: Account = CloverAccount.getAccount(context)
+            ?: run {
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = "No se pudo obtener la cuenta de Clover"
+                ))
+                return
+            }
 
-            // Usar ancho por defecto para papel de 80mm (576 puntos)
-            // El ViewPrintJob ajustará automáticamente el layout
-            val printerWidth = DEFAULT_PRINTER_WIDTH
-            val view = createFiscalTicketView(ticket, printerWidth)
-            
-            val printJob = ViewPrintJob.Builder()
-                .view(view, printerWidth)
-                .build()
+        // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
+        printHandler.post {
+            try {
+                // Usar ancho por defecto para papel de 80mm (576 puntos)
+                // El ViewPrintJob ajustará automáticamente el layout
+                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val view = createFiscalTicketView(ticket, printerWidth)
+                
+                // Medir y layout el View antes de pasarlo a ViewPrintJob
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                view.measure(widthSpec, heightSpec)
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                
+                val printJob = ViewPrintJob.Builder()
+                    .view(view, printerWidth)
+                    .build()
 
-            printJob.print(context, account)
+                printJob.print(context, account)
 
-            Log.d(TAG, "Ticket fiscal enviado a impresión")
-            callback(PrintTicketResponse(
-                success = true,
-                message = "Ticket fiscal impreso correctamente"
-            ))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error al imprimir ticket fiscal", e)
-            callback(PrintTicketResponse(
-                success = false,
-                error = e.message ?: "Error desconocido al imprimir"
-            ))
+                Log.d(TAG, "Ticket fiscal enviado a impresión")
+                callback(PrintTicketResponse(
+                    success = true,
+                    message = "Ticket fiscal impreso correctamente"
+                ))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al imprimir ticket fiscal", e)
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = e.message ?: "Error desconocido al imprimir"
+                ))
+            }
         }
     }
 

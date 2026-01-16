@@ -383,7 +383,13 @@ class PrintService(private val context: Context) {
      * Centra un texto en la línea
      */
     private fun centerText(text: String): String {
+        // Si el texto es más largo que el ancho de línea, simplemente retornarlo sin centrar
+        if (text.length >= LINE_WIDTH) {
+            return text
+        }
         val padding = (LINE_WIDTH - text.length) / 2
-        return " ".repeat(padding) + text
+        // Asegurarse de que padding nunca sea negativo
+        val safePadding = maxOf(0, padding)
+        return " ".repeat(safePadding) + text
     }
 }

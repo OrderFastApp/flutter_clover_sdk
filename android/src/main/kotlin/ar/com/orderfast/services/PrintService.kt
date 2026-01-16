@@ -2,14 +2,23 @@ package ar.com.orderfast.services
 
 import android.accounts.Account
 import android.content.Context
+import android.graphics.Typeface
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
 import ar.com.orderfast.models.FiscalTicket
 import ar.com.orderfast.models.NonFiscalTicket
 import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
-import com.clover.sdk.v1.printer.job.TextPrintJob
+import com.clover.sdk.v1.printer.Category
+import com.clover.sdk.v1.printer.Printer
+import com.clover.sdk.v1.printer.PrinterConnector
+import com.clover.sdk.v1.printer.job.ViewPrintJob
+import com.clover.sdk.v3.printer.TypeDetails
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -20,7 +29,9 @@ class PrintService(private val context: Context) {
 
     companion object {
         private const val TAG = "PrintService"
-        private const val LINE_WIDTH = 48 // Ancho típico de una impresora de tickets (48 caracteres)
+        // Para papel de 80mm, el ancho típico es ~576 puntos (72 puntos por pulgada * 8 pulgadas)
+        // Pero usaremos el ancho real de la impresora
+        private const val DEFAULT_PRINTER_WIDTH = 576 // Ancho por defecto para papel de 80mm
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
@@ -39,9 +50,11 @@ class PrintService(private val context: Context) {
                     return
                 }
 
-            val lines = buildNonFiscalTicketLines(ticket)
-            val printJob = TextPrintJob.Builder()
-                .lines(lines)
+            val printerWidth = getPrinterWidth(account) ?: DEFAULT_PRINTER_WIDTH
+            val view = createNonFiscalTicketView(ticket, printerWidth)
+
+            val printJob = ViewPrintJob.Builder()
+                .view(view, printerWidth)
                 .build()
 
             printJob.print(context, account)
@@ -74,9 +87,11 @@ class PrintService(private val context: Context) {
                     return
                 }
 
-            val lines = buildFiscalTicketLines(ticket)
-            val printJob = TextPrintJob.Builder()
-                .lines(lines)
+            val printerWidth = getPrinterWidth(account) ?: DEFAULT_PRINTER_WIDTH
+            val view = createFiscalTicketView(ticket, printerWidth)
+
+            val printJob = ViewPrintJob.Builder()
+                .view(view, printerWidth)
                 .build()
 
             printJob.print(context, account)
@@ -96,8 +111,386 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Construye las líneas del ticket no fiscal
+     * Obtiene el ancho de la impresora en puntos
      */
+    private fun getPrinterWidth(account: Account): Int? {
+        return try {
+            val printerConnector = PrinterConnector(context, account, null)
+            val printers = printerConnector.getPrinters(Category.RECEIPT)
+            if (printers.isNotEmpty()) {
+                val preferredPrinter = printers[0]
+                val typeDetails = printerConnector.getPrinterTypeDetails(preferredPrinter)
+                typeDetails?.numDotsWidth
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al obtener ancho de impresora", e)
+            null
+        }
+    }
+
+    /**
+     * Crea un View para el ticket no fiscal
+     */
+    private fun createNonFiscalTicketView(ticket: NonFiscalTicket, width: Int): View {
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        // Separador superior
+        layout.addView(createSeparatorLine(width, "="))
+
+        // Número de pedido en negrita y mayúsculas
+        layout.addView(createBoldTextView("TU NUMERO DE PEDIDO ES: ${ticket.orderNumber.uppercase()}"))
+        layout.addView(createEmptyLine())
+
+        // Preferencia (si aplica)
+        if (ticket.isTakeAway != null) {
+            val preferencia = if (ticket.isTakeAway == true) "PARA LLEVAR" else "PARA COMER AQUI"
+            layout.addView(createBoldTextView("PREFERENCIA: $preferencia"))
+            layout.addView(createEmptyLine())
+        }
+
+        // Identificador (si aplica y no es takeAway)
+        if (ticket.isTakeAway != true && ticket.identifier != null && ticket.identifier!!.isNotEmpty()) {
+            layout.addView(createBoldTextView("IDENTIFICADOR: ${ticket.identifier!!.uppercase()}"))
+            layout.addView(createEmptyLine())
+        }
+
+        // Separadores antes de la tabla
+        if (ticket.isTakeAway != null) {
+            layout.addView(createEmptyLine())
+            layout.addView(createSeparatorLine(width, "-"))
+            layout.addView(createEmptyLine())
+        }
+
+        // Encabezado de la tabla
+        layout.addView(createBoldTextView(buildTableHeader()))
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Items con subselecciones y comentarios
+        ticket.items.forEach { item ->
+            if (item.quantity > 0) {
+                layout.addView(createBoldTextView(buildItemLine(item)))
+
+                // Subselecciones
+                if (!item.subselections.isNullOrEmpty()) {
+                    item.subselections.forEach { subselection ->
+                        layout.addView(createTextView(buildSubselectionLine(subselection, item.quantity)))
+                    }
+                    layout.addView(createEmptyLine())
+                }
+
+                // Comentario del item
+                if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
+                    layout.addView(createBoldTextView("NOTA: ${item.comment!!.trim().uppercase()}"))
+                }
+
+                layout.addView(createEmptyLine())
+            }
+        }
+
+        // Separador
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Total en negrita y tamaño grande
+        layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
+        layout.addView(createEmptyLine())
+
+        // Separador
+        layout.addView(createSeparatorLine(width, "="))
+        layout.addView(createEmptyLine())
+
+        // Fecha y hora centrada
+        layout.addView(createCenteredTextView("----- ${ticket.dateTime} -----"))
+        layout.addView(createEmptyLine())
+
+        // Disclaimer centrado con asteriscos en negrita
+        val disclaimer = ticket.disclaimer ?: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
+        layout.addView(createCenteredBoldTextView("*************************"))
+        layout.addView(createCenteredBoldTextView("COMPROBANTE NO FISCAL,"))
+        layout.addView(createCenteredBoldTextView("NO VALIDO COMO FACTURA."))
+        layout.addView(createCenteredBoldTextView("*************************"))
+
+        // Espacio final
+        layout.addView(createEmptyLine())
+        layout.addView(createEmptyLine())
+
+        return layout
+    }
+
+    /**
+     * Crea un View para el ticket fiscal
+     */
+    private fun createFiscalTicketView(ticket: FiscalTicket, width: Int): View {
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val fiscalInfo = ticket.fiscalInfo
+
+        // Encabezado con tipo de comprobante
+        val tipoComprobante = ticket.tipoComprobante ?: "RECIBO C"
+        layout.addView(createCenteredBoldLargeTextView(tipoComprobante.uppercase()))
+        layout.addView(createCenteredTextView("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}"))
+        layout.addView(createSeparatorLine(width, "="))
+
+        // Información del vendedor
+        layout.addView(createTextView("RAZON SOCIAL: ${fiscalInfo.razonSocial.uppercase()}"))
+        layout.addView(createTextView("CUIT: ${fiscalInfo.cuit}"))
+        layout.addView(createTextView("DIRECCION: ${fiscalInfo.direccion.uppercase()}"))
+        layout.addView(createTextView("LOCALIDAD: ${fiscalInfo.localidad.uppercase()}"))
+        layout.addView(createTextView("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}"))
+        layout.addView(createTextView(fiscalInfo.responsable.uppercase()))
+        layout.addView(createTextView("Inicio Actividades: ${fiscalInfo.inicioActividades}"))
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Detalles de la transacción
+        layout.addView(createTextView("FECHA: ${fiscalInfo.fecha}"))
+        layout.addView(createTextView("Nro T: ${fiscalInfo.numeroT}"))
+        layout.addView(createTextView("Pto. Vta.:${fiscalInfo.puntoVenta}"))
+        if (fiscalInfo.consumidorFinal) {
+            layout.addView(createBoldTextView("CONSUMIDOR FINAL"))
+        }
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Encabezado de la tabla
+        layout.addView(createBoldTextView(buildTableHeader()))
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Items con subselecciones
+        ticket.items.forEach { item ->
+            if (item.quantity > 0) {
+                layout.addView(createBoldTextView(buildItemLine(item)))
+
+                // Subselecciones
+                if (!item.subselections.isNullOrEmpty()) {
+                    item.subselections.forEach { subselection ->
+                        layout.addView(createTextView(buildSubselectionLine(subselection, item.quantity)))
+                    }
+                    layout.addView(createEmptyLine())
+                }
+
+                layout.addView(createEmptyLine())
+            }
+        }
+
+        // Separador
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Total en negrita y tamaño grande
+        layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
+        layout.addView(createSeparatorLine(width, "-"))
+
+        // Información fiscal
+        if (fiscalInfo.regimenFiscal != null) {
+            layout.addView(createTextView(fiscalInfo.regimenFiscal!!.uppercase()))
+        }
+        if (fiscalInfo.ivaContenido != null) {
+            layout.addView(createTextView("IVA contenido: ${formatCurrency(fiscalInfo.ivaContenido)}"))
+        }
+        if (fiscalInfo.otrosImpuestosNacionales != null) {
+            layout.addView(createTextView("Otro imp. Nacionales Indirectos: ${formatCurrency(fiscalInfo.otrosImpuestosNacionales)}"))
+        }
+
+        // CAE y fecha de vencimiento
+        if (fiscalInfo.cae != null || fiscalInfo.fechaVencimiento != null) {
+            layout.addView(createEmptyLine())
+            val caeText = if (fiscalInfo.cae != null) "CAE:${fiscalInfo.cae}" else ""
+            val fechaText = if (fiscalInfo.fechaVencimiento != null) "Fech Vto.: ${fiscalInfo.fechaVencimiento}" else ""
+            if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
+                val combined = "$caeText $fechaText"
+                if (combined.length <= 48) {
+                    layout.addView(createTextView(combined))
+                } else {
+                    if (caeText.isNotEmpty()) layout.addView(createTextView(caeText))
+                    if (fechaText.isNotEmpty()) layout.addView(createTextView(fechaText))
+                }
+            } else {
+                if (caeText.isNotEmpty()) layout.addView(createTextView(caeText))
+                if (fechaText.isNotEmpty()) layout.addView(createTextView(fechaText))
+            }
+            layout.addView(createEmptyLine())
+        }
+
+        // Separador antes del QR
+        layout.addView(createSeparatorLine(width, "="))
+        layout.addView(createEmptyLine())
+
+        // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
+        if (fiscalInfo.qrCodeData != null) {
+            layout.addView(createCenteredTextView("[QR CODE]"))
+            layout.addView(createEmptyLine())
+        }
+
+        // Separador después del QR
+        layout.addView(createEmptyLine())
+        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createEmptyLine())
+
+        // Footer
+        layout.addView(createCenteredTextView("Comprobable Autorizado"))
+        layout.addView(createCenteredBoldTextView("Esta Administracion Federal no se responsabiliza por los datos"))
+        layout.addView(createCenteredBoldTextView("ingresados en el detalle de la operacion"))
+
+        // Espacio final
+        layout.addView(createEmptyLine())
+        layout.addView(createEmptyLine())
+
+        return layout
+    }
+
+    /**
+     * Crea un TextView normal
+     */
+    private fun createTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            textSize = 12f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 4, 0, 4)
+            }
+        }
+    }
+
+    /**
+     * Crea un TextView en negrita
+     */
+    private fun createBoldTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            setTypeface(null, Typeface.BOLD)
+            textSize = 12f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 4, 0, 4)
+            }
+        }
+    }
+
+    /**
+     * Crea un TextView en negrita y tamaño grande
+     */
+    private fun createBoldLargeTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            setTypeface(null, Typeface.BOLD)
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 6, 0, 6)
+            }
+        }
+    }
+
+    /**
+     * Crea un TextView centrado
+     */
+    private fun createCenteredTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            textSize = 12f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 4, 0, 4)
+            }
+        }
+    }
+
+    /**
+     * Crea un TextView centrado y en negrita
+     */
+    private fun createCenteredBoldTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            setTypeface(null, Typeface.BOLD)
+            textSize = 12f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 4, 0, 4)
+            }
+        }
+    }
+
+    /**
+     * Crea un TextView centrado, en negrita y tamaño grande
+     */
+    private fun createCenteredBoldLargeTextView(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text.uppercase()
+            setTypeface(null, Typeface.BOLD)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 8, 0, 8)
+            }
+        }
+    }
+
+    /**
+     * Crea una línea separadora
+     */
+    private fun createSeparatorLine(width: Int, character: String): TextView {
+        // Para papel de 80mm, calcular aproximadamente cuántos caracteres caben
+        // Asumiendo que cada carácter ocupa aproximadamente 6-8 puntos a tamaño de fuente 12
+        val charCount = (width / 8).coerceAtLeast(1) // Mínimo 1 carácter
+        val line = character.repeat(charCount)
+        return TextView(context).apply {
+            text = line
+            textSize = 10f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 4, 0, 4)
+            }
+        }
+    }
+
+    /**
+     * Crea una línea vacía
+     */
+    private fun createEmptyLine(): TextView {
+        return TextView(context).apply {
+            text = " "
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 2, 0, 2)
+            }
+        }
+    }
+
+    /**
+     * Construye las líneas del ticket no fiscal (deprecated - usar createNonFiscalTicketView)
+     */
+    @Deprecated("Usar createNonFiscalTicketView en su lugar")
     private fun buildNonFiscalTicketLines(ticket: NonFiscalTicket): List<String> {
         val lines = mutableListOf<String>()
 

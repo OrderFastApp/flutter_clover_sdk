@@ -362,7 +362,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
 
-            textSize = 12f
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -379,7 +379,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = Typeface.create("monospace", Typeface.BOLD)
-            textSize = 16f
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -396,7 +396,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = Typeface.create("monospace", Typeface.BOLD)
-            textSize = 18f
+            textSize = 20f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -413,7 +413,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = Typeface.create("monospace", Typeface.NORMAL)
-            textSize = 16f
+            textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -431,7 +431,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = Typeface.create("monospace", Typeface.NORMAL)
-            textSize = 14f
+            textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -449,7 +449,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = Typeface.create("monospace", Typeface.NORMAL)
-            textSize = 16f
+            textSize = 20f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -471,7 +471,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             text = line
             typeface = Typeface.create("monospace", Typeface.NORMAL)
-            textSize = 16f
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

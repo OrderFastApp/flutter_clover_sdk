@@ -1,4 +1,5 @@
 /// Exporta todos los modelos relacionados con tickets
+library models;
 export 'ticket_item.dart';
 export 'ticket_subselection.dart';
 export 'fiscal_info.dart';

@@ -18,6 +18,8 @@ import com.clover.sdk.v1.printer.job.ViewPrintJob
 
 import android.os.Handler
 import android.os.HandlerThread
+import androidx.core.content.res.ResourcesCompat
+import ar.com.orderfast.R
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -32,6 +34,10 @@ class PrintService(private val context: Context) {
         // Pero usaremos el ancho real de la impresora
         private const val DEFAULT_PRINTER_WIDTH = 576 // Ancho por defecto para papel de 80mm
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
+    }
+
+    private val robotoMonoBold: Typeface? by lazy {
+        ResourcesCompat.getFont(context, R.font.roboto_mono)
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
@@ -361,6 +367,7 @@ class PrintService(private val context: Context) {
     private fun createTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
+            typeface = robotoMonoBold
 
             textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
@@ -378,8 +385,8 @@ class PrintService(private val context: Context) {
     private fun createBoldTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = Typeface.create("monospace", Typeface.BOLD)
-            textSize = 18f
+            typeface = robotoMonoBold
+            textSize = 20f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -395,7 +402,7 @@ class PrintService(private val context: Context) {
     private fun createBoldLargeTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = Typeface.create("monospace", Typeface.BOLD)
+            typeface = robotoMonoBold
             textSize = 20f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -412,7 +419,7 @@ class PrintService(private val context: Context) {
     private fun createCenteredTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            typeface = robotoMonoBold
             textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -430,7 +437,7 @@ class PrintService(private val context: Context) {
     private fun createCenteredBoldTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            typeface = robotoMonoBold
             textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -448,7 +455,7 @@ class PrintService(private val context: Context) {
     private fun createCenteredBoldLargeTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            typeface = robotoMonoBold
             textSize = 20f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -470,7 +477,7 @@ class PrintService(private val context: Context) {
         val line = character.repeat(charCount)
         return TextView(context).apply {
             text = line
-            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            typeface = robotoMonoBold
             textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -495,96 +502,7 @@ class PrintService(private val context: Context) {
             }
         }
     }
-
-    /**
-     * Construye las líneas del ticket no fiscal (deprecated - usar createNonFiscalTicketView)
-     */
-    @Deprecated("Usar createNonFiscalTicketView en su lugar")
-    private fun buildNonFiscalTicketLines(ticket: NonFiscalTicket): List<String> {
-        val lines = mutableListOf<String>()
-
-        // Separador superior
-        lines.add("=".repeat(LINE_WIDTH))
-
-        // Número de pedido (formato similar al ejemplo)
-        lines.add("TU NUMERO DE PEDIDO ES: ${ticket.orderNumber}")
-        lines.add("")
-
-        // Preferencia (si aplica)
-        if (ticket.isTakeAway != null) {
-            val preferencia = if (ticket.isTakeAway == true) "Para llevar" else "Para comer aquí"
-            lines.add("Preferencia: $preferencia")
-            lines.add("")
-        }
-
-        // Identificador (si aplica y no es takeAway)
-        if (ticket.isTakeAway != true && ticket.identifier != null && ticket.identifier!!.isNotEmpty()) {
-            lines.add("Identificador: ${ticket.identifier}")
-            lines.add("")
-        }
-
-        // Separadores antes de la tabla
-        if (ticket.isTakeAway != null) {
-            lines.add(" ")
-            lines.add("-".repeat(LINE_WIDTH))
-            lines.add(" ")
-        }
-
-        // Encabezado de la tabla
-        lines.add(buildTableHeader())
-        lines.add("-".repeat(LINE_WIDTH))
-
-        // Items con subselecciones y comentarios
-        ticket.items.forEach { item ->
-            if (item.quantity > 0) {
-                lines.add(buildItemLine(item))
-
-                // Subselecciones
-                if (!item.subselections.isNullOrEmpty()) {
-                    item.subselections.forEach { subselection ->
-                        lines.add(buildSubselectionLine(subselection, item.quantity))
-                    }
-                    lines.add("")
-                }
-
-                // Comentario del item
-                if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
-                    lines.add("NOTA: ${item.comment!!.trim()}")
-                }
-
-                lines.add(" ")
-            }
-        }
-
-        // Separador
-        lines.add("-".repeat(LINE_WIDTH))
-
-        // Total
-        lines.add(buildTotalLine(ticket.total))
-        lines.add("")
-
-        // Separador
-        lines.add("=".repeat(LINE_WIDTH))
-        lines.add("")
-
-        // Fecha y hora centrada
-        lines.add(centerText("----- ${ticket.dateTime} -----"))
-        lines.add("")
-
-        // Disclaimer centrado con asteriscos
-        val disclaimer = ticket.disclaimer ?: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
-        lines.add(centerText("*************************"))
-        lines.add(centerText("COMPROBANTE NO FISCAL,"))
-        lines.add(centerText("NO VALIDO COMO FACTURA."))
-        lines.add(centerText("*************************"))
-
-        // Espacio final
-        lines.add("")
-        lines.add("")
-
-        return lines
-    }
-
+    
     /**
      * Construye las líneas del ticket fiscal
      */

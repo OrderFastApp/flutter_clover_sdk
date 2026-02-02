@@ -36,12 +36,18 @@ class PrintService(private val context: Context) {
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
     }
 
-    private val robotoMonoBold: Typeface? by lazy {
-        ResourcesCompat.getFont(context, R.font.roboto_mono)
+    /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
+    private val robotoMono: Typeface by lazy {
+        ResourcesCompat.getFont(context, R.font.roboto_mono) ?: Typeface.MONOSPACE
+    }
+
+    /** Roboto Mono en negrita (synthetic bold sobre la misma fuente). */
+    private val robotoMonoBold: Typeface by lazy {
+        Typeface.create(robotoMono, Typeface.BOLD)
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
-    
+
     // HandlerThread para ejecutar operaciones de impresión en segundo plano
     private val printThread = HandlerThread("PrintThread").apply { start() }
     private val printHandler = Handler(printThread.looper)
@@ -66,13 +72,13 @@ class PrintService(private val context: Context) {
                 // El ViewPrintJob ajustará automáticamente el layout
                 val printerWidth = DEFAULT_PRINTER_WIDTH
                 val view = createNonFiscalTicketView(ticket, printerWidth)
-                
+
                 // Medir y layout el View antes de pasarlo a ViewPrintJob
                 val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
                 val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
                 view.measure(widthSpec, heightSpec)
                 view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-                
+
                 val printJob = ViewPrintJob.Builder()
                     .view(view, printerWidth)
                     .build()
@@ -114,13 +120,13 @@ class PrintService(private val context: Context) {
                 // El ViewPrintJob ajustará automáticamente el layout
                 val printerWidth = DEFAULT_PRINTER_WIDTH
                 val view = createFiscalTicketView(ticket, printerWidth)
-                
+
                 // Medir y layout el View antes de pasarlo a ViewPrintJob
                 val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
                 val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
                 view.measure(widthSpec, heightSpec)
                 view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-                
+
                 val printJob = ViewPrintJob.Builder()
                     .view(view, printerWidth)
                     .build()
@@ -367,8 +373,7 @@ class PrintService(private val context: Context) {
     private fun createTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = robotoMonoBold
-
+            typeface = robotoMono
             textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -419,7 +424,7 @@ class PrintService(private val context: Context) {
     private fun createCenteredTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            typeface = robotoMonoBold
+            typeface = robotoMono
             textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -472,12 +477,11 @@ class PrintService(private val context: Context) {
      */
     private fun createSeparatorLine(width: Int, character: String): TextView {
         // Para papel de 80mm, calcular aproximadamente cuántos caracteres caben
-        // Asumiendo que cada carácter ocupa aproximadamente 6-8 puntos a tamaño de fuente 12
-        val charCount = (width / 8).coerceAtLeast(1) // Mínimo 1 carácter
+        val charCount = (width / 8).coerceAtLeast(1)
         val line = character.repeat(charCount)
         return TextView(context).apply {
             text = line
-            typeface = robotoMonoBold
+            typeface = robotoMono
             textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -502,7 +506,7 @@ class PrintService(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Construye las líneas del ticket fiscal
      */

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+### printer
+- Fixed font size
+
+
 ## 0.6.0
 
 ### printer

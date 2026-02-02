@@ -231,8 +231,10 @@ class CloverSdkPlugin {
     try {
       final result = await _channel.invokeMethod('enableScreensaver', {
         'activateOnSleep': activateOnSleep,
-        if (dreamComponentPackage != null) 'dreamComponentPackage': dreamComponentPackage,
-        if (dreamComponentClass != null) 'dreamComponentClass': dreamComponentClass,
+        if (dreamComponentPackage != null)
+          'dreamComponentPackage': dreamComponentPackage,
+        if (dreamComponentClass != null)
+          'dreamComponentClass': dreamComponentClass,
       });
       return Map<String, dynamic>.from(result);
     } catch (e) {
@@ -274,7 +276,8 @@ class CloverSdkPlugin {
     required String className,
   }) async {
     try {
-      final result = await _channel.invokeMethod('setScreensaverDreamComponent', {
+      final result =
+          await _channel.invokeMethod('setScreensaverDreamComponent', {
         'packageName': packageName,
         'className': className,
       });
@@ -392,6 +395,7 @@ class CloverSdkPlugin {
   Future<PrintTicketResponse> printTicket({
     dynamic nonFiscalTicket,
     dynamic fiscalTicket,
+    bool textTicket = false,
   }) async {
     try {
       if (nonFiscalTicket == null && fiscalTicket == null) {
@@ -408,12 +412,12 @@ class CloverSdkPlugin {
             : nonFiscalTicket;
       }
       if (fiscalTicket != null) {
-        arguments['fiscalTicket'] = fiscalTicket is FiscalTicket
-            ? fiscalTicket.toMap()
-            : fiscalTicket;
+        arguments['fiscalTicket'] =
+            fiscalTicket is FiscalTicket ? fiscalTicket.toMap() : fiscalTicket;
       }
 
-      final result = await _channel.invokeMethod('printTicket', arguments);
+      final result = await _channel.invokeMethod(
+          textTicket ? 'printTextTicket' : 'printTicket', arguments);
       return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
     } catch (e) {
       return PrintTicketResponse(
@@ -437,7 +441,8 @@ class CloverSdkPlugin {
   ///   print('Error: ${result.error}');
   /// }
   /// ```
-  Future<PrintTicketResponse> printTestNonFiscalTicket() async {
+  Future<PrintTicketResponse> printTestNonFiscalTicket(
+      {bool textTicket = false}) async {
     final now = DateTime.now();
     final timestamp = _formatDateTime(now);
 
@@ -457,7 +462,8 @@ class CloverSdkPlugin {
       identifier: null, // Puedes agregar un identificador para probar
     );
 
-    return await printTicket(nonFiscalTicket: testTicket);
+    return await printTicket(
+        nonFiscalTicket: testTicket, textTicket: textTicket);
   }
 
   /// Imprime un ticket fiscal de prueba con datos mockeados
@@ -474,7 +480,8 @@ class CloverSdkPlugin {
   ///   print('Error: ${result.error}');
   /// }
   /// ```
-  Future<PrintTicketResponse> printTestFiscalTicket() async {
+  Future<PrintTicketResponse> printTestFiscalTicket(
+      {bool textTicket = false}) async {
     final now = DateTime.now();
     final fecha = _formatDate(now);
     final timestamp = _formatDateTime(now);
@@ -503,7 +510,8 @@ class CloverSdkPlugin {
         numeroT: '00000000344',
         puntoVenta: '0002',
         consumidorFinal: true,
-        regimenFiscal: 'Regimen de Transparencia Fiscal al Consumidor Ley 27.743',
+        regimenFiscal:
+            'Regimen de Transparencia Fiscal al Consumidor Ley 27.743',
         ivaContenido: 21.35,
         otrosImpuestosNacionales: 0.0,
         cae: '86030164034844',
@@ -512,7 +520,7 @@ class CloverSdkPlugin {
       ),
     );
 
-    return await printTicket(fiscalTicket: testTicket);
+    return await printTicket(fiscalTicket: testTicket, textTicket: textTicket);
   }
 
   /// Formatea una fecha como dd/MM/yyyy

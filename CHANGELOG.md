@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+### printer
+- Added font roboto
+
+
 ## 0.6.1
 
 ### printer

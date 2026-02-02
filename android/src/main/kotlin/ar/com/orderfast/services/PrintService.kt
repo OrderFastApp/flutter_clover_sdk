@@ -361,6 +361,7 @@ class PrintService(private val context: Context) {
     private fun createTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
+
             textSize = 12f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -377,8 +378,8 @@ class PrintService(private val context: Context) {
     private fun createBoldTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            setTypeface(null, Typeface.BOLD)
-            textSize = 12f
+            typeface = Typeface.create("monospace", Typeface.BOLD)
+            textSize = 16f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -394,8 +395,8 @@ class PrintService(private val context: Context) {
     private fun createBoldLargeTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            setTypeface(null, Typeface.BOLD)
-            textSize = 14f
+            typeface = Typeface.create("monospace", Typeface.BOLD)
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -411,7 +412,8 @@ class PrintService(private val context: Context) {
     private fun createCenteredTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            textSize = 12f
+            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            textSize = 16f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -428,8 +430,8 @@ class PrintService(private val context: Context) {
     private fun createCenteredBoldTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            setTypeface(null, Typeface.BOLD)
-            textSize = 12f
+            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            textSize = 14f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -446,7 +448,7 @@ class PrintService(private val context: Context) {
     private fun createCenteredBoldLargeTextView(text: String): TextView {
         return TextView(context).apply {
             this.text = text.uppercase()
-            setTypeface(null, Typeface.BOLD)
+            typeface = Typeface.create("monospace", Typeface.NORMAL)
             textSize = 16f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -468,7 +470,8 @@ class PrintService(private val context: Context) {
         val line = character.repeat(charCount)
         return TextView(context).apply {
             text = line
-            textSize = 10f
+            typeface = Typeface.create("monospace", Typeface.NORMAL)
+            textSize = 16f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

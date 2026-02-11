@@ -12,6 +12,7 @@ import ar.com.orderfast.models.FiscalTicket
 import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
 import ar.com.orderfast.models.FiscalInfo
+import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.services.PaymentService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
@@ -579,7 +580,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             when {
                 nonFiscalData != null -> {
                     val ticket = parseNonFiscalTicket(nonFiscalData)
-                    printTextService?.printNonFiscalTicket(ticket) { response ->
+                    printTextService?.printNonFiscalTicket(ticket) { response: PrintTicketResponse ->
                         if (response.success) {
                             result.success(mapOf(
                                 "success" to true,
@@ -592,7 +593,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 }
                 fiscalData != null -> {
                     val ticket = parseFiscalTicket(fiscalData)
-                    printTextService?.printFiscalTicket(ticket) { response ->
+                    printTextService?.printFiscalTicket(ticket) { response: PrintTicketResponse ->
                         if (response.success) {
                             result.success(mapOf(
                                 "success" to true,

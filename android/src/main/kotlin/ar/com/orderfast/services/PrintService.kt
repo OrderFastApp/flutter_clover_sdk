@@ -401,8 +401,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
             addView(createTableCell(noteText, Gravity.START, bold = true, COL_WEIGHT_DESC))
-            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_SUBTOT))
-            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_TOTAL))
+            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_SUBTOT))
+            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_TOTAL))
         }
     }
 

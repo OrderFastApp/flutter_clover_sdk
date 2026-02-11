@@ -7,6 +7,8 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.TableLayout
+import android.widget.TableRow
 import android.widget.TextView
 import ar.com.orderfast.models.FiscalTicket
 import ar.com.orderfast.models.NonFiscalTicket
@@ -35,11 +37,16 @@ class PrintService(private val context: Context) {
         private const val DEFAULT_PRINTER_WIDTH = 576 // Papel 80mm
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
         /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
-        private const val SHORT_SEP_LENGTH = 14
+        private const val SHORT_SEP_LENGTH = 40
         /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
-        private const val TOP_EQ_LENGTH = 6
+        private const val TOP_EQ_LENGTH = 40
         /** Asteriscos que enmarcan el disclaimer. */
-        private const val ASTERISK_LENGTH = 14
+        private const val ASTERISK_LENGTH = 20
+        /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
+        private const val COL_WEIGHT_CANT = 0.6f
+        private const val COL_WEIGHT_DESC = 2.2f
+        private const val COL_WEIGHT_SUBTOT = 1f
+        private const val COL_WEIGHT_TOTAL = 1f
     }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
@@ -177,9 +184,6 @@ class PrintService(private val context: Context) {
 
         // Encabezado: tres líneas cortas de iguales (como en el ticket)
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-
         // Número de pedido (texto como en imagen: "NUMERO DE PEDIDO ES:")
         layout.addView(createBoldTextView("NUMERO DE PEDIDO ES: ${ticket.orderNumber.uppercase()}"))
         layout.addView(createEmptyLine())
@@ -202,31 +206,9 @@ class PrintService(private val context: Context) {
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
         layout.addView(createEmptyLine())
 
-        // Encabezado de la tabla: CANT. DESCRIPCION SUBTOT. TOTAL (como en imagen)
-        layout.addView(createBoldTextView(buildTableHeader()))
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-
-        // Items con subselecciones y comentarios
-        ticket.items.forEach { item ->
-            if (item.quantity > 0) {
-                layout.addView(createBoldTextView(buildItemLine(item)))
-
-                // Subselecciones
-                if (!item.subselections.isNullOrEmpty()) {
-                    item.subselections.forEach { subselection ->
-                        layout.addView(createTextView(buildSubselectionLine(subselection, item.quantity)))
-                    }
-                    layout.addView(createEmptyLine())
-                }
-
-                // Comentario del item
-                if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
-                    layout.addView(createBoldTextView("NOTA: ${item.comment!!.trim().uppercase()}"))
-                }
-
-                layout.addView(createEmptyLine())
-            }
-        }
+        // Tabla de productos (TableLayout con filas y columnas)
+        val table = createProductTable(ticket)
+        layout.addView(table)
 
         // Separador corto antes del total
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
@@ -272,6 +254,163 @@ class PrintService(private val context: Context) {
     }
 
     /**
+     * Crea la tabla de productos (filas/columnas) para el ticket no fiscal.
+     */
+    private fun createProductTable(ticket: NonFiscalTicket): TableLayout {
+        val table = TableLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(0, 4, 0, 4)
+            isStretchAllColumns = false
+            setColumnStretchable(1, true) // Columna DESCRIPCION toma el espacio restante
+        }
+
+        // Fila de encabezado: CANT. | DESCRIPCION | SUBTOT. | TOTAL
+        table.addView(createTableHeaderRow())
+        // Separador dentro de la tabla (fila con guiones)
+        table.addView(createTableSeparatorRow())
+
+        // Filas de items y subselecciones
+        ticket.items.forEach { item ->
+            if (item.quantity <= 0) return@forEach
+
+            // Fila del producto
+            table.addView(createProductRow(item))
+
+            // Filas de subselecciones (indentadas)
+            if (!item.subselections.isNullOrEmpty()) {
+                item.subselections.forEach { sub ->
+                    table.addView(createSubselectionRow(sub))
+                }
+            }
+
+            // Comentario del item (fila que abarca todas las columnas o solo descripción)
+            if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
+                table.addView(createNoteRow(item.comment!!.trim()))
+            }
+        }
+
+        return table
+    }
+
+    /**
+     * Crea la tabla de productos para el ticket fiscal (misma estructura de filas/columnas).
+     */
+    private fun createFiscalProductTable(ticket: FiscalTicket): TableLayout {
+        val table = TableLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(0, 4, 0, 4)
+            setColumnStretchable(1, true)
+        }
+        table.addView(createTableHeaderRow())
+        table.addView(createTableSeparatorRow())
+        ticket.items.forEach { item ->
+            if (item.quantity <= 0) return@forEach
+            table.addView(createProductRow(item))
+            if (!item.subselections.isNullOrEmpty()) {
+                item.subselections.forEach { sub -> table.addView(createSubselectionRow(sub)) }
+            }
+            if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
+                table.addView(createNoteRow(item.comment!!.trim()))
+            }
+        }
+        return table
+    }
+
+    /** Fila de encabezado de la tabla. */
+    private fun createTableHeaderRow(): TableRow {
+        return TableRow(context).apply {
+            addView(createTableCell("CANT.", Gravity.START, bold = true, COL_WEIGHT_CANT))
+            addView(createTableCell("DESCRIPCION", Gravity.START, bold = true, COL_WEIGHT_DESC))
+            addView(createTableCell("SUBTOT.", Gravity.END, bold = true, COL_WEIGHT_SUBTOT))
+            addView(createTableCell("TOTAL", Gravity.END, bold = true, COL_WEIGHT_TOTAL))
+        }
+    }
+
+    /** Fila separadora (guiones). */
+    private fun createTableSeparatorRow(): TableRow {
+        return TableRow(context).apply {
+            addView(TextView(context).apply {
+                text = "-".repeat(SHORT_SEP_LENGTH)
+                typeface = robotoMono
+                textSize = 18f
+                layoutParams = TableRow.LayoutParams(TableLayout.LayoutParams.MATCH_PARENT, TableRow.LayoutParams.WRAP_CONTENT)
+                setPadding(2, 4, 2, 4)
+            })
+        }
+    }
+
+    /** Fila de un producto. */
+    private fun createProductRow(item: TicketItem): TableRow {
+        val desc = if (item.description.length > 22) {
+            item.description.uppercase().substring(0, 19) + "..."
+        } else {
+            item.description.uppercase()
+        }
+        return TableRow(context).apply {
+            addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT))
+            addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC))
+            addView(createTableCell(formatCurrency(item.subtotal), Gravity.END, bold = true, COL_WEIGHT_SUBTOT))
+            addView(createTableCell(formatCurrency(item.total), Gravity.END, bold = true, COL_WEIGHT_TOTAL))
+        }
+    }
+
+    /** Fila de una subselección (primera celda vacía para indentar). */
+    private fun createSubselectionRow(sub: TicketSubselection): TableRow {
+        val desc = if (sub.name.length > 20) {
+            sub.name.uppercase().substring(0, 17) + "..."
+        } else {
+            sub.name.uppercase()
+        }
+        val text = "$desc x ${sub.quantity}"
+        return TableRow(context).apply {
+            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
+            addView(createTableCell(text, Gravity.START, bold = false, COL_WEIGHT_DESC))
+            addView(createTableCell(formatCurrency(sub.price), Gravity.END, bold = false, COL_WEIGHT_SUBTOT))
+            addView(createTableCell(formatCurrency(sub.total), Gravity.END, bold = false, COL_WEIGHT_TOTAL))
+        }
+    }
+
+    /** Fila de nota/comentario del item. */
+    private fun createNoteRow(note: String): TableRow {
+        val noteText = "NOTA: ${note.uppercase()}"
+        return TableRow(context).apply {
+            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
+            addView(createTableCell(noteText, Gravity.START, bold = true, COL_WEIGHT_DESC))
+            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_SUBTOT))
+            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_TOTAL))
+        }
+    }
+
+    /**
+     * Crea una celda de tabla (TextView con alineación y peso de columna).
+     * Pesos: CANT.=0.6, DESCRIPCION=2.2, SUBTOT.=1, TOTAL=1 para alinear columnas.
+     */
+    private fun createTableCell(
+        text: String,
+        gravity: Int,
+        bold: Boolean,
+        weight: Float = 1f,
+    ): TextView {
+        val lp = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight).apply {
+            marginEnd = 2
+        }
+        return TextView(context).apply {
+            this.text = text
+            this.gravity = gravity
+            typeface = if (bold) robotoMonoBold else robotoMono
+            textSize = 18f
+            layoutParams = lp
+            setPadding(2, 4, 2, 4)
+        }
+    }
+
+    /**
      * Crea un View para el ticket fiscal
      */
     private fun createFiscalTicketView(ticket: FiscalTicket, width: Int): View {
@@ -310,26 +449,9 @@ class PrintService(private val context: Context) {
         }
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
-        // Encabezado de la tabla
-        layout.addView(createBoldTextView(buildTableHeader()))
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-
-        // Items con subselecciones
-        ticket.items.forEach { item ->
-            if (item.quantity > 0) {
-                layout.addView(createBoldTextView(buildItemLine(item)))
-
-                // Subselecciones
-                if (!item.subselections.isNullOrEmpty()) {
-                    item.subselections.forEach { subselection ->
-                        layout.addView(createTextView(buildSubselectionLine(subselection, item.quantity)))
-                    }
-                    layout.addView(createEmptyLine())
-                }
-
-                layout.addView(createEmptyLine())
-            }
-        }
+        // Tabla de productos (misma estructura que ticket no fiscal)
+        val fiscalTable = createFiscalProductTable(ticket)
+        layout.addView(fiscalTable)
 
         // Separador
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
@@ -420,7 +542,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 20f
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -437,7 +559,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 20f
+            textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -454,7 +576,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 18f
+            textSize = 16f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -472,7 +594,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 18f
+            textSize = 16f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -490,7 +612,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 20f
+            textSize = 18f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

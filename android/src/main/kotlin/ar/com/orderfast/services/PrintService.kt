@@ -20,6 +20,8 @@ import android.os.Handler
 import android.os.HandlerThread
 import androidx.core.content.res.ResourcesCompat
 import ar.com.orderfast.R
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -30,10 +32,14 @@ class PrintService(private val context: Context) {
 
     companion object {
         private const val TAG = "PrintService"
-        // Para papel de 80mm, el ancho típico es ~576 puntos (72 puntos por pulgada * 8 pulgadas)
-        // Pero usaremos el ancho real de la impresora
-        private const val DEFAULT_PRINTER_WIDTH = 576 // Ancho por defecto para papel de 80mm
+        private const val DEFAULT_PRINTER_WIDTH = 576 // Papel 80mm
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
+        /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
+        private const val SHORT_SEP_LENGTH = 14
+        /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
+        private const val TOP_EQ_LENGTH = 6
+        /** Asteriscos que enmarcan el disclaimer. */
+        private const val ASTERISK_LENGTH = 14
     }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
@@ -46,7 +52,16 @@ class PrintService(private val context: Context) {
         Typeface.create(robotoMono, Typeface.BOLD)
     }
 
-    private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
+    /** Formato argentino: $ 4.900,00 (espacio después de $, punto miles, coma decimal). */
+    private val numberFormat: NumberFormat by lazy {
+        val symbols = DecimalFormatSymbols(Locale("es", "AR")).apply {
+            groupingSeparator = '.'
+            decimalSeparator = ','
+        }
+        DecimalFormat("#,##0.00", symbols)
+    }
+
+    private fun formatCurrency(amount: Double): String = "\$ ${numberFormat.format(amount)}"
 
     // HandlerThread para ejecutar operaciones de impresión en segundo plano
     private val printThread = HandlerThread("PrintThread").apply { start() }
@@ -160,11 +175,13 @@ class PrintService(private val context: Context) {
             )
         }
 
-        // Separador superior
-        layout.addView(createSeparatorLine(width, "="))
+        // Encabezado: tres líneas cortas de iguales (como en el ticket)
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
 
-        // Número de pedido en negrita y mayúsculas
-        layout.addView(createBoldTextView("TU NUMERO DE PEDIDO ES: ${ticket.orderNumber.uppercase()}"))
+        // Número de pedido (texto como en imagen: "NUMERO DE PEDIDO ES:")
+        layout.addView(createBoldTextView("NUMERO DE PEDIDO ES: ${ticket.orderNumber.uppercase()}"))
         layout.addView(createEmptyLine())
 
         // Preferencia (si aplica)
@@ -180,16 +197,14 @@ class PrintService(private val context: Context) {
             layout.addView(createEmptyLine())
         }
 
-        // Separadores antes de la tabla
-        if (ticket.isTakeAway != null) {
-            layout.addView(createEmptyLine())
-            layout.addView(createSeparatorLine(width, "-"))
-            layout.addView(createEmptyLine())
-        }
+        // Separador corto antes de la tabla (guiones)
+        layout.addView(createEmptyLine())
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
+        layout.addView(createEmptyLine())
 
-        // Encabezado de la tabla
+        // Encabezado de la tabla: CANT. DESCRIPCION SUBTOT. TOTAL (como en imagen)
         layout.addView(createBoldTextView(buildTableHeader()))
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Items con subselecciones y comentarios
         ticket.items.forEach { item ->
@@ -213,8 +228,8 @@ class PrintService(private val context: Context) {
             }
         }
 
-        // Separador
-        layout.addView(createSeparatorLine(width, "-"))
+        // Separador corto antes del total
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Descuento (opcional)
         if (ticket.discountCode != null && ticket.discountCode!!.isNotEmpty()) {
@@ -231,24 +246,23 @@ class PrintService(private val context: Context) {
             }
         }
 
-        // Total en negrita y tamaño grande
+        // Total (como en imagen: "TOTAL:" y monto en formato $ 4.900,00)
         layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
         layout.addView(createEmptyLine())
 
-        // Separador
-        layout.addView(createSeparatorLine(width, "="))
+        // Separador largo de iguales (ancho completo)
+        layout.addView(createSeparatorLine("=", null, width))
         layout.addView(createEmptyLine())
 
-        // Fecha y hora centrada
-        layout.addView(createCenteredTextView("----- ${ticket.dateTime} -----"))
+        // Fecha y hora centrada con guiones: "--- 11/02/2026 13:00:41 ---"
+        layout.addView(createCenteredTextView("--- ${ticket.dateTime} ---"))
         layout.addView(createEmptyLine())
 
-        // Disclaimer centrado con asteriscos en negrita
-        val disclaimer = ticket.disclaimer ?: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
-        layout.addView(createCenteredBoldTextView("*************************"))
+        // Disclaimer: asteriscos cortos (~14), luego texto (como en imagen)
+        layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
         layout.addView(createCenteredBoldTextView("COMPROBANTE NO FISCAL,"))
         layout.addView(createCenteredBoldTextView("NO VALIDO COMO FACTURA."))
-        layout.addView(createCenteredBoldTextView("*************************"))
+        layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
 
         // Espacio final
         layout.addView(createEmptyLine())
@@ -275,7 +289,7 @@ class PrintService(private val context: Context) {
         val tipoComprobante = ticket.tipoComprobante ?: "RECIBO C"
         layout.addView(createCenteredBoldLargeTextView(tipoComprobante.uppercase()))
         layout.addView(createCenteredTextView("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}"))
-        layout.addView(createSeparatorLine(width, "="))
+        layout.addView(createSeparatorLine("=", null, width))
 
         // Información del vendedor
         layout.addView(createTextView("RAZON SOCIAL: ${fiscalInfo.razonSocial.uppercase()}"))
@@ -285,7 +299,7 @@ class PrintService(private val context: Context) {
         layout.addView(createTextView("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}"))
         layout.addView(createTextView(fiscalInfo.responsable.uppercase()))
         layout.addView(createTextView("Inicio Actividades: ${fiscalInfo.inicioActividades}"))
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Detalles de la transacción
         layout.addView(createTextView("FECHA: ${fiscalInfo.fecha}"))
@@ -294,11 +308,11 @@ class PrintService(private val context: Context) {
         if (fiscalInfo.consumidorFinal) {
             layout.addView(createBoldTextView("CONSUMIDOR FINAL"))
         }
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Encabezado de la tabla
         layout.addView(createBoldTextView(buildTableHeader()))
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Items con subselecciones
         ticket.items.forEach { item ->
@@ -318,11 +332,11 @@ class PrintService(private val context: Context) {
         }
 
         // Separador
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Total en negrita y tamaño grande
         layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Información fiscal
         if (fiscalInfo.regimenFiscal != null) {
@@ -356,7 +370,7 @@ class PrintService(private val context: Context) {
         }
 
         // Separador antes del QR
-        layout.addView(createSeparatorLine(width, "="))
+        layout.addView(createSeparatorLine("=", null, width))
         layout.addView(createEmptyLine())
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
@@ -367,7 +381,7 @@ class PrintService(private val context: Context) {
 
         // Separador después del QR
         layout.addView(createEmptyLine())
-        layout.addView(createSeparatorLine(width, "-"))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
         layout.addView(createEmptyLine())
 
         // Footer
@@ -488,11 +502,13 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Crea una línea separadora
+     * Crea una línea separadora.
+     * @param character Carácter a repetir (= o -)
+     * @param length Si no es null, número de caracteres (línea corta). Si es null, usa fullWidth.
+     * @param fullWidth Ancho en puntos para línea larga cuando length == null.
      */
-    private fun createSeparatorLine(width: Int, character: String): TextView {
-        // Para papel de 80mm, calcular aproximadamente cuántos caracteres caben
-        val charCount = (width / 8).coerceAtLeast(1)
+    private fun createSeparatorLine(character: String, length: Int? = null, fullWidth: Int = DEFAULT_PRINTER_WIDTH): TextView {
+        val charCount = length ?: (fullWidth / 8).coerceAtLeast(1)
         val line = character.repeat(charCount)
         return TextView(context).apply {
             text = line
@@ -643,54 +659,52 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Construye el encabezado de la tabla
+     * Construye el encabezado de la tabla (como en imagen: CANT. DESCRIPCION SUBTOT. TOTAL)
      */
     private fun buildTableHeader(): String {
         return String.format(
-            "%-5s %-25s %-8s %-8s",
-            "Cant.",
-            "Descripcion",
-            "SubTot.",
-            "Total"
+            "%-5s %-22s %10s %10s",
+            "CANT.",
+            "DESCRIPCION",
+            "SUBTOT.",
+            "TOTAL"
         ).trim()
     }
 
     /**
-     * Construye una línea de item
+     * Construye una línea de item (descripción truncada con ... como en imagen)
      */
     private fun buildItemLine(item: TicketItem): String {
-        val maxDescLength = 25
+        val maxDescLength = 22
         val desc = if (item.description.length > maxDescLength) {
-            item.description.substring(0, maxDescLength - 3) + "..."
+            item.description.uppercase().substring(0, maxDescLength - 3) + "..."
         } else {
-            item.description
+            item.description.uppercase()
         }
-
-        // Formato: Cantidad | Descripción | Subtotal | Total
+        val subtotStr = formatCurrency(item.subtotal)
+        val totalStr = formatCurrency(item.total)
         return String.format(
-            "%-5d %-25s %8s %8s",
+            "%-5d %-22s %10s %10s",
             item.quantity,
             desc,
-            formatCurrency(item.subtotal),
-            formatCurrency(item.total)
+            subtotStr,
+            totalStr
         ).trim()
     }
 
     /**
-     * Construye una línea de subselección
+     * Construye una línea de subselección (indentada, mayúsculas)
      */
     private fun buildSubselectionLine(subselection: TicketSubselection, parentQuantity: Int): String {
-        val maxDescLength = 25
+        val maxDescLength = 22
         val desc = if (subselection.name.length > maxDescLength) {
-            subselection.name.substring(0, maxDescLength - 3) + "..."
+            subselection.name.uppercase().substring(0, maxDescLength - 3) + "..."
         } else {
-            subselection.name
+            subselection.name.uppercase()
         }
-
-        // Formato: espacio | "nombre x cantidad" | precio unitario | total
         val subDesc = "$desc x ${subselection.quantity}"
         return String.format(
-            "     %-25s %8s %8s",
+            "     %-22s %10s %10s",
             subDesc,
             formatCurrency(subselection.price),
             formatCurrency(subselection.total)
@@ -700,13 +714,14 @@ class PrintService(private val context: Context) {
     /**
      * Construye la línea del total
      */
+    /**
+     * Línea del total (como en imagen: "TOTAL:" y "$ 4.900,00")
+     */
     private fun buildTotalLine(total: Double): String {
-        // Formatear como moneda y remover el símbolo $ duplicado si existe
-        val formatted = formatCurrency(total)
-        val totalText = if (formatted.startsWith("$")) formatted else "\$$formatted"
+        val totalText = formatCurrency(total)
         return String.format(
-            "%-35s %13s",
-            "Total:",
+            "%-12s %s",
+            "TOTAL:",
             totalText
         ).trim()
     }
@@ -728,12 +743,6 @@ class PrintService(private val context: Context) {
         }
     }
 
-    /**
-     * Formatea un número como moneda
-     */
-    private fun formatCurrency(amount: Double): String {
-        return numberFormat.format(amount)
-    }
 
     /**
      * Centra un texto en la línea

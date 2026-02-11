@@ -44,10 +44,10 @@ class PrintService(private val context: Context) {
         /** Asteriscos que enmarcan el disclaimer. */
         private const val ASTERISK_LENGTH = 20
         /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
-        private const val COL_WEIGHT_CANT = 0.8f
-        private const val COL_WEIGHT_DESC = 1.2f
-        private const val COL_WEIGHT_SUBTOT = 1.6f
-        private const val COL_WEIGHT_TOTAL = 1.6f
+        private const val COL_WEIGHT_CANT = 0.2f
+        private const val COL_WEIGHT_DESC = 1.4f
+        private const val COL_WEIGHT_SUBTOT = 1.0f
+        private const val COL_WEIGHT_TOTAL = 1.0f
 
     }
 
@@ -351,7 +351,7 @@ class PrintService(private val context: Context) {
     private fun createTableSeparatorRow(): TableRow {
         return TableRow(context).apply {
             val tv = TextView(context).apply {
-                text = "-".repeat(SHORT_SEP_LENGTH)
+                text = "-".repeat(10)
                 typeface = robotoMono
                 textSize = 18f
                 includeFontPadding = false

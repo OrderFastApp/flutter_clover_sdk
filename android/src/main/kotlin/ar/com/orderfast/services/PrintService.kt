@@ -44,10 +44,11 @@ class PrintService(private val context: Context) {
         /** Asteriscos que enmarcan el disclaimer. */
         private const val ASTERISK_LENGTH = 20
         /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
-        private const val COL_WEIGHT_CANT = 0.6f
-        private const val COL_WEIGHT_DESC = 2.2f
-        private const val COL_WEIGHT_SUBTOT = 1f
-        private const val COL_WEIGHT_TOTAL = 1f
+        private const val COL_WEIGHT_CANT = 0.8f
+        private const val COL_WEIGHT_DESC = 3.2f
+        private const val COL_WEIGHT_SUBTOT = 1.6f
+        private const val COL_WEIGHT_TOTAL = 1.6f
+
     }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
@@ -265,7 +266,18 @@ class PrintService(private val context: Context) {
             )
             setPadding(0, 4, 0, 4)
             isStretchAllColumns = false
-            setColumnStretchable(1, true) // Columna DESCRIPCION toma el espacio restante
+
+            // Solo la descripción puede "respirar"
+            setColumnStretchable(1, true)
+
+            // Las de precios NO se estiran
+            setColumnStretchable(2, false)
+            setColumnStretchable(3, false)
+
+            // Si hace falta achicar, que achique descripción antes que precios
+            setColumnShrinkable(1, true)
+            setColumnShrinkable(2, false)
+            setColumnShrinkable(3, false)
         }
 
         // Fila de encabezado: CANT. | DESCRIPCION | SUBTOT. | TOTAL
@@ -326,12 +338,13 @@ class PrintService(private val context: Context) {
     /** Fila de encabezado de la tabla. */
     private fun createTableHeaderRow(): TableRow {
         return TableRow(context).apply {
-            addView(createTableCell("CANT.", Gravity.START, bold = true, COL_WEIGHT_CANT, singleLine = true))
-            addView(createTableCell("DESCRIPCION", Gravity.START, bold = true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell("SUBTOT.", Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell("TOTAL", Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
+            addView(createTableCell("CANT.", Gravity.START, true, COL_WEIGHT_CANT, singleLine = true))
+            addView(createTableCell("DESCRIPCION", Gravity.START, true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
+            addView(createTableCell("SUBTOT.", Gravity.END, true, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell("TOTAL", Gravity.END, true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
+
 
     /** Fila separadora (guiones). */
     /** Fila separadora (guiones) que ocupa todas las columnas (SPAN=4). */

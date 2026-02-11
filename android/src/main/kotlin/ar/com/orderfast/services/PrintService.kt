@@ -347,27 +347,30 @@ class PrintService(private val context: Context) {
 
 
     /** Fila separadora (guiones). */
-    /** Fila separadora (guiones) que ocupa todas las columnas (SPAN=4). */
     private fun createTableSeparatorRow(): TableRow {
         return TableRow(context).apply {
-            val tv = TextView(context).apply {
-                text = "-".repeat(10)
+            // 1) CANT vacío
+            addView(createTableCell("", Gravity.START, false, COL_WEIGHT_CANT, singleLine = true))
+
+            // 2) DESCRIPCION con guiones (acá va la línea)
+            addView(TextView(context).apply {
+                text = "-".repeat(SHORT_SEP_LENGTH) // 40 como vos definiste
                 typeface = robotoMono
                 textSize = 18f
                 includeFontPadding = false
+                gravity = Gravity.START
                 setPadding(2, 4, 2, 4)
-            }
+                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, COL_WEIGHT_DESC)
+            })
 
-            val lp = TableRow.LayoutParams(
-                TableRow.LayoutParams.MATCH_PARENT,
-                TableRow.LayoutParams.WRAP_CONTENT
-            ).apply {
-                span = 4 // <- CLAVE: ocupa CANT + DESC + SUBTOT + TOTAL
-            }
+            // 3) SUBTOT vacío
+            addView(createTableCell("", Gravity.END, false, COL_WEIGHT_SUBTOT, singleLine = true))
 
-            addView(tv, lp)
+            // 4) TOTAL vacío
+            addView(createTableCell("", Gravity.END, false, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
+
 
 
     /** Fila de un producto. */

@@ -44,11 +44,10 @@ class PrintService(private val context: Context) {
         /** Asteriscos que enmarcan el disclaimer. */
         private const val ASTERISK_LENGTH = 20
         /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
-        private const val COL_WEIGHT_CANT = 0.2f
-        private const val COL_WEIGHT_DESC = 1.4f
-        private const val COL_WEIGHT_SUBTOT = 1.0f
-        private const val COL_WEIGHT_TOTAL = 1.0f
-
+        private const val COL_WEIGHT_CANT = 0.4f    // era 0.2f - muy estrecho
+        private const val COL_WEIGHT_DESC = 1.6f    // era 1.4f
+        private const val COL_WEIGHT_SUBTOT = 0.9f  // era 1.0f
+        private const val COL_WEIGHT_TOTAL = 0.9f   // era 1.0f
     }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
@@ -264,7 +263,7 @@ class PrintService(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            setPadding(0, 4, 0, 4)
+            setPadding(0, 0, 0, 4)
             isStretchAllColumns = false
 
             // Solo la descripción puede "respirar"
@@ -283,7 +282,7 @@ class PrintService(private val context: Context) {
         // Fila de encabezado: CANT. | DESCRIPCION | SUBTOT. | TOTAL
         table.addView(createTableHeaderRow())
         // Separador dentro de la tabla (fila con guiones)
-        table.addView(createTableSeparatorRow())
+        table.addView(createTableSeparatorView())
 
         // Filas de items y subselecciones
         ticket.items.forEach { item ->
@@ -321,7 +320,7 @@ class PrintService(private val context: Context) {
             setColumnStretchable(1, true)
         }
         table.addView(createTableHeaderRow())
-        table.addView(createTableSeparatorRow())
+        table.addView(createTableSeparatorView())
         ticket.items.forEach { item ->
             if (item.quantity <= 0) return@forEach
             table.addView(createProductRow(item))
@@ -347,27 +346,17 @@ class PrintService(private val context: Context) {
 
 
     /** Fila separadora (guiones). */
-    private fun createTableSeparatorRow(): TableRow {
-        return TableRow(context).apply {
-            // 1) CANT vacío
-            addView(createTableCell("", Gravity.START, false, COL_WEIGHT_CANT, singleLine = true))
-
-            // 2) DESCRIPCION con guiones (acá va la línea)
-            addView(TextView(context).apply {
-                text = "-".repeat(SHORT_SEP_LENGTH) // 40 como vos definiste
-                typeface = robotoMono
-                textSize = 18f
-                includeFontPadding = false
-                gravity = Gravity.START
-                setPadding(2, 4, 2, 4)
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, COL_WEIGHT_DESC)
-            })
-
-            // 3) SUBTOT vacío
-            addView(createTableCell("", Gravity.END, false, COL_WEIGHT_SUBTOT, singleLine = true))
-
-            // 4) TOTAL vacío
-            addView(createTableCell("", Gravity.END, false, COL_WEIGHT_TOTAL, singleLine = true))
+    private fun createTableSeparatorView(): TextView {
+        return TextView(context).apply {
+            text = "-".repeat(LINE_CHAR) // o SHORT_SEP_LENGTH si querés
+            typeface = robotoMono
+            textSize = 18f
+            includeFontPadding = false
+            setPadding(2, 4, 2, 4)
+            layoutParams = TableLayout.LayoutParams(
+                TableLayout.LayoutParams.MATCH_PARENT,
+                TableLayout.LayoutParams.WRAP_CONTENT
+            )
         }
     }
 

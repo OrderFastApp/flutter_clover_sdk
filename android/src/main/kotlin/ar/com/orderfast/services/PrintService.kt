@@ -36,6 +36,7 @@ class PrintService(private val context: Context) {
         private const val TAG = "PrintService"
         private const val DEFAULT_PRINTER_WIDTH = 576 // Papel 80mm
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
+        private const val LINE_CHAR = 42
         /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
         private const val SHORT_SEP_LENGTH = 40
         /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
@@ -325,36 +326,44 @@ class PrintService(private val context: Context) {
     /** Fila de encabezado de la tabla. */
     private fun createTableHeaderRow(): TableRow {
         return TableRow(context).apply {
-            addView(createTableCell("CANT.", Gravity.START, bold = true, COL_WEIGHT_CANT))
-            addView(createTableCell("DESCRIPCION", Gravity.START, bold = true, COL_WEIGHT_DESC))
+            addView(createTableCell("CANT.", Gravity.START, bold = true, COL_WEIGHT_CANT, singleLine = true))
+            addView(createTableCell("DESCRIPCION", Gravity.START, bold = true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
             addView(createTableCell("SUBTOT.", Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
             addView(createTableCell("TOTAL", Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 
     /** Fila separadora (guiones). */
+    /** Fila separadora (guiones) que ocupa todas las columnas (SPAN=4). */
     private fun createTableSeparatorRow(): TableRow {
         return TableRow(context).apply {
-            addView(TextView(context).apply {
+            val tv = TextView(context).apply {
                 text = "-".repeat(SHORT_SEP_LENGTH)
                 typeface = robotoMono
                 textSize = 18f
-                layoutParams = TableRow.LayoutParams(TableLayout.LayoutParams.MATCH_PARENT, TableRow.LayoutParams.WRAP_CONTENT)
+                includeFontPadding = false
                 setPadding(2, 4, 2, 4)
-            })
+            }
+
+            val lp = TableRow.LayoutParams(
+                TableRow.LayoutParams.MATCH_PARENT,
+                TableRow.LayoutParams.WRAP_CONTENT
+            ).apply {
+                span = 4 // <- CLAVE: ocupa CANT + DESC + SUBTOT + TOTAL
+            }
+
+            addView(tv, lp)
         }
     }
 
+
     /** Fila de un producto. */
     private fun createProductRow(item: TicketItem): TableRow {
-        val desc = if (item.description.length > 22) {
-            item.description.uppercase().substring(0, 19) + "..."
-        } else {
-            item.description.uppercase()
-        }
+        val desc = item.description.uppercase()
+
         return TableRow(context).apply {
-            addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT))
-            addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC))
+            addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT, singleLine = true))
+            addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
             addView(createTableCell(formatCurrency(item.subtotal), Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
             addView(createTableCell(formatCurrency(item.total), Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
         }
@@ -362,19 +371,16 @@ class PrintService(private val context: Context) {
 
     /** Fila de una subselección (primera celda vacía para indentar). */
     private fun createSubselectionRow(sub: TicketSubselection): TableRow {
-        val desc = if (sub.name.length > 20) {
-            sub.name.uppercase().substring(0, 17) + "..."
-        } else {
-            sub.name.uppercase()
-        }
-        val text = "$desc x ${sub.quantity}"
+        val text = "${sub.name.uppercase()} x ${sub.quantity}"
+
         return TableRow(context).apply {
-            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
-            addView(createTableCell(text, Gravity.START, bold = false, COL_WEIGHT_DESC))
+            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT, singleLine = true))
+            addView(createTableCell(text, Gravity.START, bold = false, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
             addView(createTableCell(formatCurrency(sub.price), Gravity.END, bold = false, COL_WEIGHT_SUBTOT, singleLine = true))
             addView(createTableCell(formatCurrency(sub.total), Gravity.END, bold = false, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
+
 
     /** Fila de nota/comentario del item. */
     private fun createNoteRow(note: String): TableRow {
@@ -397,23 +403,35 @@ class PrintService(private val context: Context) {
         bold: Boolean,
         weight: Float = 1f,
         singleLine: Boolean = false,
+        ellipsizeEnd: Boolean = false,
     ): TextView {
         val lp = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight).apply {
             marginEnd = 2
         }
+
         return TextView(context).apply {
             this.text = text
             this.gravity = gravity
             typeface = if (bold) robotoMonoBold else robotoMono
             textSize = 18f
+            includeFontPadding = false
             layoutParams = lp
             setPadding(2, 4, 2, 4)
+
+            // Importante para tickets: que no refluya raro
+            isSingleLine = singleLine
+            maxLines = if (singleLine) 1 else 2
+
             if (singleLine) {
-                maxLines = 1
-                isSingleLine = true
+                setHorizontallyScrolling(true)
+            }
+
+            if (ellipsizeEnd) {
+                ellipsize = android.text.TextUtils.TruncateAt.END
             }
         }
     }
+
 
     /**
      * Crea un View para el ticket fiscal
@@ -678,7 +696,7 @@ class PrintService(private val context: Context) {
         val tipoComprobante = ticket.tipoComprobante ?: "Recibo C"
         lines.add(centerText(tipoComprobante))
         lines.add("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}")
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(LINE_CHAR))
 
         // Información del vendedor
         lines.add("RAZON SOCIAL: ${fiscalInfo.razonSocial}")
@@ -688,7 +706,7 @@ class PrintService(private val context: Context) {
         lines.add("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}")
         lines.add(fiscalInfo.responsable)
         lines.add("Inicio Actividades: ${fiscalInfo.inicioActividades}")
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
 
         // Detalles de la transacción
         lines.add("FECHA: ${fiscalInfo.fecha}")
@@ -697,11 +715,11 @@ class PrintService(private val context: Context) {
         if (fiscalInfo.consumidorFinal) {
             lines.add("CONSUMIDOR FINAL")
         }
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
 
         // Encabezado de la tabla
         lines.add(buildTableHeader())
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
 
         // Items con subselecciones
         ticket.items.forEach { item ->
@@ -721,11 +739,11 @@ class PrintService(private val context: Context) {
         }
 
         // Separador
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
 
         // Total
         lines.add(buildTotalLine(ticket.total))
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
 
         // Información fiscal
         if (fiscalInfo.regimenFiscal != null) {
@@ -746,7 +764,7 @@ class PrintService(private val context: Context) {
             if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
                 // Intentar ponerlos en la misma línea si caben
                 val combined = "$caeText $fechaText"
-                if (combined.length <= LINE_WIDTH) {
+                if (combined.length <= LINE_CHAR) {
                     lines.add(combined)
                 } else {
                     lines.add(caeText)
@@ -760,7 +778,7 @@ class PrintService(private val context: Context) {
         }
 
         // Separador antes del QR
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(LINE_CHAR))
         lines.add("")
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
@@ -771,7 +789,7 @@ class PrintService(private val context: Context) {
 
         // Separador después del QR
         lines.add(" ")
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(LINE_CHAR))
         lines.add("")
 
         // Footer
@@ -910,10 +928,10 @@ class PrintService(private val context: Context) {
      */
     private fun centerText(text: String): String {
         // Si el texto es más largo que el ancho de línea, simplemente retornarlo sin centrar
-        if (text.length >= LINE_WIDTH) {
+        if (text.length >= LINE_CHAR) {
             return text
         }
-        val padding = (LINE_WIDTH - text.length) / 2
+        val padding = (LINE_CHAR - text.length) / 2
         // Asegurarse de que padding nunca sea negativo
         val safePadding = maxOf(0, padding)
         return " ".repeat(safePadding) + text

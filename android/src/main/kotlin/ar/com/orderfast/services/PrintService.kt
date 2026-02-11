@@ -228,12 +228,12 @@ class PrintService(private val context: Context) {
             }
         }
 
-        // Total (como en imagen: "TOTAL:" y monto en formato $ 4.900,00)
-        layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
+        // Total pegado a la derecha (TOTAL y $ a la derecha)
+        layout.addView(createTotalLineView(ticket.total))
         layout.addView(createEmptyLine())
 
         // Separador largo de iguales (ancho completo)
-        layout.addView(createSeparatorLine("=", null, width))
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
         layout.addView(createEmptyLine())
 
         // Fecha y hora centrada con guiones: "--- 11/02/2026 13:00:41 ---"
@@ -327,8 +327,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell("CANT.", Gravity.START, bold = true, COL_WEIGHT_CANT))
             addView(createTableCell("DESCRIPCION", Gravity.START, bold = true, COL_WEIGHT_DESC))
-            addView(createTableCell("SUBTOT.", Gravity.END, bold = true, COL_WEIGHT_SUBTOT))
-            addView(createTableCell("TOTAL", Gravity.END, bold = true, COL_WEIGHT_TOTAL))
+            addView(createTableCell("SUBTOT.", Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell("TOTAL", Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 
@@ -355,8 +355,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT))
             addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC))
-            addView(createTableCell(formatCurrency(item.subtotal), Gravity.END, bold = true, COL_WEIGHT_SUBTOT))
-            addView(createTableCell(formatCurrency(item.total), Gravity.END, bold = true, COL_WEIGHT_TOTAL))
+            addView(createTableCell(formatCurrency(item.subtotal), Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell(formatCurrency(item.total), Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 
@@ -371,8 +371,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
             addView(createTableCell(text, Gravity.START, bold = false, COL_WEIGHT_DESC))
-            addView(createTableCell(formatCurrency(sub.price), Gravity.END, bold = false, COL_WEIGHT_SUBTOT))
-            addView(createTableCell(formatCurrency(sub.total), Gravity.END, bold = false, COL_WEIGHT_TOTAL))
+            addView(createTableCell(formatCurrency(sub.price), Gravity.END, bold = false, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell(formatCurrency(sub.total), Gravity.END, bold = false, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 
@@ -389,13 +389,14 @@ class PrintService(private val context: Context) {
 
     /**
      * Crea una celda de tabla (TextView con alineación y peso de columna).
-     * Pesos: CANT.=0.6, DESCRIPCION=2.2, SUBTOT.=1, TOTAL=1 para alinear columnas.
+     * [singleLine] = true evita que el $ y el precio se separen en líneas (para celdas de moneda).
      */
     private fun createTableCell(
         text: String,
         gravity: Int,
         bold: Boolean,
         weight: Float = 1f,
+        singleLine: Boolean = false,
     ): TextView {
         val lp = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight).apply {
             marginEnd = 2
@@ -407,6 +408,10 @@ class PrintService(private val context: Context) {
             textSize = 18f
             layoutParams = lp
             setPadding(2, 4, 2, 4)
+            if (singleLine) {
+                maxLines = 1
+                isSingleLine = true
+            }
         }
     }
 
@@ -456,8 +461,8 @@ class PrintService(private val context: Context) {
         // Separador
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
-        // Total en negrita y tamaño grande
-        layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
+        // Total pegado a la derecha
+        layout.addView(createTotalLineView(ticket.total))
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Información fiscal
@@ -576,7 +581,8 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 16f
+            textSize = 18f
+            
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -834,18 +840,51 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Construye la línea del total
+     * Vista de la línea del total: "TOTAL:" pegado a la izquierda, monto pegado a la derecha.
      */
+    private fun createTotalLineView(total: Double): View {
+        val totalText = formatCurrency(total)
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 6, 0, 6)
+            }
+        }
+        // TOTAL: pegado a la izquierda
+        row.addView(TextView(context).apply {
+            text = "TOTAL:"
+            typeface = robotoMonoBold
+            textSize = 20f
+            gravity = Gravity.START
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+        // Monto pegado a la derecha (ocupa el resto del ancho y se alinea a la derecha)
+        row.addView(TextView(context).apply {
+            text = totalText
+            typeface = robotoMonoBold
+            textSize = 20f
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        })
+        return row
+    }
+
     /**
-     * Línea del total (como en imagen: "TOTAL:" y "$ 4.900,00")
+     * Construye la línea del total como string (para impresión por texto).
      */
     private fun buildTotalLine(total: Double): String {
         val totalText = formatCurrency(total)
-        return String.format(
-            "%-12s %s",
-            "TOTAL:",
-            totalText
-        ).trim()
+        return "TOTAL:  $totalText"
     }
 
     /**

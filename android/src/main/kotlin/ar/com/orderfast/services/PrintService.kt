@@ -216,6 +216,21 @@ class PrintService(private val context: Context) {
         // Separador
         layout.addView(createSeparatorLine(width, "-"))
 
+        // Descuento (opcional)
+        if (ticket.discountCode != null && ticket.discountCode!!.isNotEmpty()) {
+            val discountText = buildDiscountLine(ticket)
+            if (discountText.isNotEmpty()) {
+                layout.addView(createBoldTextView(discountText))
+                layout.addView(createEmptyLine())
+            }
+        } else if (ticket.discountPercent != null || ticket.discountAmount != null) {
+            val discountText = buildDiscountLine(ticket)
+            if (discountText.isNotEmpty()) {
+                layout.addView(createBoldTextView(discountText))
+                layout.addView(createEmptyLine())
+            }
+        }
+
         // Total en negrita y tamaño grande
         layout.addView(createBoldLargeTextView(buildTotalLine(ticket.total)))
         layout.addView(createEmptyLine())
@@ -694,6 +709,23 @@ class PrintService(private val context: Context) {
             "Total:",
             totalText
         ).trim()
+    }
+
+    /**
+     * Construye la línea de descuento
+     */
+    private fun buildDiscountLine(ticket: NonFiscalTicket): String {
+        val code = ticket.discountCode?.takeIf { it.isNotEmpty() }?.uppercase() ?: ""
+        val percent = ticket.discountPercent
+        val amount = ticket.discountAmount
+        return when {
+            code.isNotEmpty() && percent != null -> "DESCUENTO: $code ${percent.toInt()}%"
+            code.isNotEmpty() && amount != null -> "DESCUENTO: $code ${formatCurrency(amount)}"
+            code.isNotEmpty() -> "DESCUENTO: $code"
+            percent != null -> "DESCUENTO: ${percent.toInt()}%"
+            amount != null -> "DESCUENTO: ${formatCurrency(amount)}"
+            else -> ""
+        }
     }
 
     /**

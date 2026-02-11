@@ -23,6 +23,15 @@ class NonFiscalTicket {
   /// Texto de disclaimer (por defecto: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA.")
   final String? disclaimer;
 
+  /// Código o etiqueta del descuento (ej: "descuentito"). Opcional.
+  final String? discountCode;
+
+  /// Porcentaje de descuento (ej: 50 para 50%). Opcional.
+  final double? discountPercent;
+
+  /// Monto del descuento. Opcional.
+  final double? discountAmount;
+
   NonFiscalTicket({
     required this.orderNumber,
     required this.items,
@@ -31,6 +40,9 @@ class NonFiscalTicket {
     this.isTakeAway,
     this.identifier,
     this.disclaimer,
+    this.discountCode,
+    this.discountPercent,
+    this.discountAmount,
   });
 
   /// Convierte el modelo a un Map para enviarlo al plugin nativo
@@ -43,6 +55,9 @@ class NonFiscalTicket {
       if (isTakeAway != null) 'isTakeAway': isTakeAway,
       if (identifier != null && identifier!.isNotEmpty) 'identifier': identifier,
       if (disclaimer != null) 'disclaimer': disclaimer,
+      if (discountCode != null && discountCode!.isNotEmpty) 'discountCode': discountCode,
+      if (discountPercent != null) 'discountPercent': discountPercent,
+      if (discountAmount != null) 'discountAmount': discountAmount,
     };
   }
 
@@ -58,6 +73,13 @@ class NonFiscalTicket {
       isTakeAway: map['isTakeAway'] as bool?,
       identifier: map['identifier'] as String?,
       disclaimer: map['disclaimer'] as String?,
+      discountCode: map['discountCode'] as String?,
+      discountPercent: map['discountPercent'] != null
+          ? (map['discountPercent'] as num).toDouble()
+          : null,
+      discountAmount: map['discountAmount'] != null
+          ? (map['discountAmount'] as num).toDouble()
+          : null,
     );
   }
 }

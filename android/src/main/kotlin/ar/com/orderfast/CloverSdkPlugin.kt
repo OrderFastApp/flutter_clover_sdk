@@ -701,7 +701,10 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             dateTime = dateTime,
             isTakeAway = isTakeAway,
             identifier = identifier,
-            disclaimer = disclaimer
+            disclaimer = disclaimer,
+            discountCode = data["discountCode"] as? String,
+            discountPercent = (data["discountPercent"] as? Number)?.toDouble(),
+            discountAmount = (data["discountAmount"] as? Number)?.toDouble()
         )
     }
 

@@ -6,3 +6,5 @@ export 'fiscal_info.dart';
 export 'non_fiscal_ticket.dart';
 export 'fiscal_ticket.dart';
 export 'print_ticket_response.dart';
+export 'order_ticket_models.dart';
+export 'order_to_ticket_mapper.dart';

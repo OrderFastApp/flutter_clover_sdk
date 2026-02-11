@@ -42,13 +42,15 @@ class TicketItem {
     };
   }
 
-  /// Crea un TicketItem desde un Map
+  /// Crea un TicketItem desde un Map (acepta quantity como int o double desde JSON).
   factory TicketItem.fromMap(Map<String, dynamic> map) {
+    final q = map['quantity'];
+    final quantity = q is int ? q : (q is num ? q.toInt() : 0);
     return TicketItem(
-      quantity: map['quantity'] as int,
-      description: map['description'] as String,
-      subtotal: (map['subtotal'] as num).toDouble(),
-      total: (map['total'] as num).toDouble(),
+      quantity: quantity,
+      description: (map['description'] as String?) ?? '',
+      subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
+      total: (map['total'] as num?)?.toDouble() ?? 0.0,
       comment: map['comment'] as String?,
       subselections: map['subselections'] != null
           ? (map['subselections'] as List<dynamic>)

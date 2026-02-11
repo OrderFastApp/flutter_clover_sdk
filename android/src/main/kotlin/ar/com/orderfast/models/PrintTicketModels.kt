@@ -59,7 +59,10 @@ data class NonFiscalTicket(
     val dateTime: String,
     val isTakeAway: Boolean? = null,
     val identifier: String? = null,
-    val disclaimer: String? = "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
+    val disclaimer: String? = "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA.",
+    val discountCode: String? = null,
+    val discountPercent: Double? = null,
+    val discountAmount: Double? = null
 )
 
 /**

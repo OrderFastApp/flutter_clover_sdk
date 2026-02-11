@@ -427,6 +427,52 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Imprime un ticket no fiscal a partir del JSON de la orden (API).
+  ///
+  /// Acepta el mismo formato que devuelve la API: [order_items], [order_sub_selection]
+  /// (donde lo que importa es [order_sub_selection] con name, quantity, price),
+  /// [order_discounts] opcional, [total], [id], [created_at], etc.
+  ///
+  /// [order] - Map con la orden (order_items, total, order_discounts, etc.)
+  /// [orderNumber] - Opcional; si no se pasa se usa order.id
+  /// [dateTime] - Opcional; si no se pasa se usa order.created_at
+  /// [isTakeAway] - Opcional
+  /// [identifier] - Opcional (ej. mesa)
+  /// [textTicket] - true para impresión por texto (TextPrintJob)
+  ///
+  /// Ejemplo:
+  /// ```dart
+  /// final result = await cloverSdk.printOrderTicket(order: orderJson);
+  /// ```
+  Future<PrintTicketResponse> printOrderTicket({
+    required Map<String, dynamic> order,
+    String? orderNumber,
+    String? dateTime,
+    bool? isTakeAway,
+    String? identifier,
+    bool textTicket = false,
+  }) async {
+    try {
+      final ticketOrder = TicketOrder.fromJson(order);
+      final nonFiscal = orderToNonFiscalTicket(
+        ticketOrder,
+        orderNumber: orderNumber,
+        dateTime: dateTime,
+        isTakeAway: isTakeAway,
+        identifier: identifier,
+      );
+      return await printTicket(
+        nonFiscalTicket: nonFiscal,
+        textTicket: textTicket,
+      );
+    } catch (e) {
+      return PrintTicketResponse(
+        success: false,
+        error: e.toString(),
+      );
+    }
+  }
+
   /// Imprime un ticket no fiscal de prueba con datos mockeados
   ///
   /// Esta función crea un ticket no fiscal de ejemplo basado en los datos

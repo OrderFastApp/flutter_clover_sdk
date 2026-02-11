@@ -29,13 +29,15 @@ class TicketSubselection {
     };
   }
 
-  /// Crea un TicketSubselection desde un Map
+  /// Crea un TicketSubselection desde un Map (acepta quantity como int o double desde JSON).
   factory TicketSubselection.fromMap(Map<String, dynamic> map) {
+    final q = map['quantity'];
+    final quantity = q is int ? q : (q is num ? q.toInt() : 0);
     return TicketSubselection(
-      name: map['name'] as String,
-      quantity: map['quantity'] as int,
-      price: (map['price'] as num).toDouble(),
-      total: (map['total'] as num).toDouble(),
+      name: (map['name'] as String?) ?? '',
+      quantity: quantity,
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      total: (map['total'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

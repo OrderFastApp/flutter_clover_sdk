@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5
+
+### printer
+- Mejoro sistema de tickets
+
+
 ## 0.6.3
 
 ### printer

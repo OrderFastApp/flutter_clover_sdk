@@ -81,6 +81,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "isScreensaverSupported" -> isScreensaverSupported(result)
                 "printTicket" -> printTicket(call, result)
                 "printTextTicket" -> printTextTicket(call, result)
+                "printImage" -> printImage(call, result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -614,6 +615,34 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
+    private fun printImage(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val printContext = activity ?: context
+            if (printService == null) {
+                printService = PrintService(printContext)
+            }
+
+            val base64 = call.argument<String>("imageBase64")
+                ?: run {
+                    result.error("MISSING_IMAGE", "Se requiere imageBase64", null)
+                    return
+                }
+
+            printService?.printImage(base64) { response ->
+                if (response.success) {
+                    result.success(mapOf(
+                        "success" to true,
+                        "message" to response.message
+                    ))
+                } else {
+                    result.error("PRINT_ERROR", response.error, null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al imprimir imagen", e)
+            result.error("PRINT_ERROR", e.message, null)
+        }
+    }
 
     private fun printTicket(call: MethodCall, result: MethodChannel.Result) {
         try {

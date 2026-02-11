@@ -427,6 +427,37 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Imprime una imagen desde base64 usando ImagePrintJob2 (Clover SDK).
+  ///
+  /// [imageBase64] - Imagen codificada en base64. Puede incluir el prefijo
+  /// `data:image/png;base64,` o `data:image/jpeg;base64,`; se ignorará automáticamente.
+  ///
+  /// La imagen se escala automáticamente al ancho del papel por la impresora.
+  /// Si la altura supera 2048px, se reescala antes de enviar.
+  /// Width máximo: 576px (80mm de ancho).
+  /// Ejemplo:
+  /// ```dart
+  /// final result = await cloverSdk.printImage(imageBase64: base64String);
+  /// if (result.success) {
+  ///   print('Imagen impresa');
+  /// }
+  /// ```
+  Future<PrintTicketResponse> printImage({
+    required String imageBase64,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('printImage', {
+        'imageBase64': imageBase64,
+      });
+      return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
+    } catch (e) {
+      return PrintTicketResponse(
+        success: false,
+        error: e.toString(),
+      );
+    }
+  }
+
   /// Imprime un ticket no fiscal a partir del JSON de la orden (API).
   ///
   /// Acepta el mismo formato que devuelve la API: [order_items], [order_sub_selection]

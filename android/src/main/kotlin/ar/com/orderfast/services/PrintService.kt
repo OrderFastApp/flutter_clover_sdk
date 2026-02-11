@@ -2,7 +2,10 @@ package ar.com.orderfast.services
 
 import android.accounts.Account
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
+import android.util.Base64
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -16,6 +19,7 @@ import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
+import com.clover.sdk.v1.printer.job.ImagePrintJob2
 import com.clover.sdk.v1.printer.job.ViewPrintJob
 
 import android.os.Handler
@@ -48,6 +52,8 @@ class PrintService(private val context: Context) {
         private const val COL_WEIGHT_DESC = 1.6f    // era 1.4f
         private const val COL_WEIGHT_SUBTOT = 0.9f  // era 1.0f
         private const val COL_WEIGHT_TOTAL = 0.9f   // era 1.0f
+        /** Altura máxima en píxeles para ImagePrintJob2 (Clover SDK). */
+        private const val IMAGE_MAX_HEIGHT = 2048
     }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
@@ -166,6 +172,70 @@ class PrintService(private val context: Context) {
                 callback(PrintTicketResponse(
                     success = false,
                     error = e.message ?: "Error desconocido al imprimir"
+                ))
+            }
+        }
+    }
+
+    /**
+     * Imprime una imagen desde base64 usando ImagePrintJob2 (Clover SDK).
+     * El bitmap se escala automáticamente al ancho del papel.
+     * Altura máxima: 2048px (si excede se reescala).
+     *
+     * @param base64 Imagen en base64 (puede incluir prefijo data:image/...;base64,)
+     */
+    fun printImage(base64: String, callback: (PrintTicketResponse) -> Unit) {
+        val account: Account = CloverAccount.getAccount(context)
+            ?: run {
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = "No se pudo obtener la cuenta de Clover"
+                ))
+                return
+            }
+
+        // build() hace IO bloqueante, debe ejecutarse en hilo de fondo
+        printHandler.post {
+            try {
+                val cleanBase64 = base64.substringAfter(",").trim().ifEmpty { base64 }
+                val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?: run {
+                        callback(PrintTicketResponse(
+                            success = false,
+                            error = "No se pudo decodificar la imagen base64"
+                        ))
+                        return@post
+                    }
+
+                val scaledBitmap = if (bitmap.height > IMAGE_MAX_HEIGHT) {
+                    val scale = IMAGE_MAX_HEIGHT.toFloat() / bitmap.height
+                    val newWidth = (bitmap.width * scale).toInt()
+                    Bitmap.createScaledBitmap(bitmap, newWidth, IMAGE_MAX_HEIGHT, true).also {
+                        if (it != bitmap) bitmap.recycle()
+                    }
+                } else {
+                    bitmap
+                }
+
+                val printJob = ImagePrintJob2.Builder(context)
+                    .bitmap(scaledBitmap)
+                    .build()
+
+                printJob.print(context, account, null)
+
+                if (scaledBitmap != bitmap) scaledBitmap.recycle()
+
+                Log.d(TAG, "Imagen enviada a impresión")
+                callback(PrintTicketResponse(
+                    success = true,
+                    message = "Imagen impresa correctamente"
+                ))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al imprimir imagen", e)
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = e.message ?: "Error desconocido al imprimir imagen"
                 ))
             }
         }

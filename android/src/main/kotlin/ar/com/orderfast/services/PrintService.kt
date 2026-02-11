@@ -45,7 +45,7 @@ class PrintService(private val context: Context) {
         private const val ASTERISK_LENGTH = 20
         /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
         private const val COL_WEIGHT_CANT = 0.8f
-        private const val COL_WEIGHT_DESC = 3.2f
+        private const val COL_WEIGHT_DESC = 1.2f
         private const val COL_WEIGHT_SUBTOT = 1.6f
         private const val COL_WEIGHT_TOTAL = 1.6f
 
@@ -340,8 +340,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell("CANT.", Gravity.START, true, COL_WEIGHT_CANT, singleLine = true))
             addView(createTableCell("DESCRIPCION", Gravity.START, true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell("SUBTOT.", Gravity.END, true, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell("TOTAL", Gravity.END, true, COL_WEIGHT_TOTAL, singleLine = true))
+            addView(createTableCell("SUBTOT.", Gravity.START, true, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell("TOTAL", Gravity.START, true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 
@@ -377,8 +377,8 @@ class PrintService(private val context: Context) {
         return TableRow(context).apply {
             addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT, singleLine = true))
             addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell(formatCurrency(item.subtotal), Gravity.END, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell(formatCurrency(item.total), Gravity.END, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
+            addView(createTableCell(formatCurrency(item.subtotal), Gravity.START, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
+            addView(createTableCell(formatCurrency(item.total), Gravity.START, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
         }
     }
 

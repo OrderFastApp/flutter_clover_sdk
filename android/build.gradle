@@ -65,6 +65,8 @@ android {
 
     defaultConfig {
         minSdk = 21
+        // Reglas de R8/ProGuard para el SDK de Clover; se fusionan en la app de release.
+        consumerProguardFiles "consumer-proguard-rules.pro"
     }
 
     dependencies {

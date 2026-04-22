@@ -420,7 +420,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             text = "-".repeat(LINE_CHAR) // o SHORT_SEP_LENGTH si querés
             typeface = robotoMono
-            textSize = 18f
+            textSize = 27f
             includeFontPadding = false
             setPadding(2, 4, 2, 4)
             layoutParams = TableLayout.LayoutParams(
@@ -488,7 +488,7 @@ class PrintService(private val context: Context) {
             this.text = text
             this.gravity = gravity
             typeface = if (bold) robotoMonoBold else robotoMono
-            textSize = 18f
+            textSize = 27f
             includeFontPadding = false
             layoutParams = lp
             setPadding(2, 4, 2, 4)
@@ -623,7 +623,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 18f
+            textSize = 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -640,7 +640,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 18f
+            textSize = 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -657,7 +657,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 18f
+            textSize = 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -674,7 +674,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 18f
+            textSize = 27f
 
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -693,7 +693,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 16f
+            textSize = 24f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -711,7 +711,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 18f
+            textSize = 27f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -734,7 +734,7 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             text = line
             typeface = robotoMono
-            textSize = 18f
+            textSize = 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -950,7 +950,7 @@ class PrintService(private val context: Context) {
         row.addView(TextView(context).apply {
             text = "TOTAL:"
             typeface = robotoMonoBold
-            textSize = 20f
+            textSize = 30f
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -961,7 +961,7 @@ class PrintService(private val context: Context) {
         row.addView(TextView(context).apply {
             text = totalText
             typeface = robotoMonoBold
-            textSize = 20f
+            textSize = 30f
             gravity = Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 0,

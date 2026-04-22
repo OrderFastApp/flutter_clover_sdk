@@ -40,11 +40,11 @@ class PrintService(private val context: Context) {
         private const val TAG = "PrintService"
         private const val DEFAULT_PRINTER_WIDTH = 576 // Papel 80mm
         private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
-        private const val LINE_CHAR = 42
+        private const val LINE_CHAR = 22
         /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
-        private const val SHORT_SEP_LENGTH = 40
+        private const val SHORT_SEP_LENGTH = 20
         /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
-        private const val TOP_EQ_LENGTH = 40
+        private const val TOP_EQ_LENGTH = 20
         /** Asteriscos que enmarcan el disclaimer. */
         private const val ASTERISK_LENGTH = 20
         /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */

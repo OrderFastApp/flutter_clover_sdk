@@ -535,7 +535,7 @@ class PrintService(private val context: Context) {
     /** Fila separadora (guiones). */
     private fun createTableSeparatorView(): TextView {
         return TextView(context).apply {
-            text = "-".repeat(LINE_CHAR) // o SHORT_SEP_LENGTH si querés
+            text = "-".repeat(lineCharCount) // o SHORT_SEP_LENGTH si querés
             typeface = robotoMono
             textSize = 27f
             includeFontPadding = false
@@ -936,7 +936,7 @@ class PrintService(private val context: Context) {
 
         // Total
         lines.add(buildTotalLine(ticket.total))
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
 
         // Información fiscal
         if (fiscalInfo.regimenFiscal != null) {

@@ -286,7 +286,7 @@ class PrintTextService(private val context: Context) {
 
         // Total
         lines.add(buildTotalLine(ticket.total))
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Información fiscal
         if (fiscalInfo.regimenFiscal != null) {

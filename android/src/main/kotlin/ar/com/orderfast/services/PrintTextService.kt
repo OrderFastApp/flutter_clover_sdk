@@ -10,6 +10,7 @@ import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.TextPrintJob
+import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -20,10 +21,53 @@ class PrintTextService(private val context: Context) {
 
     companion object {
         private const val TAG = "PrintTextService"
-        private const val LINE_WIDTH = 48 // Ancho típico de una impresora de tickets (48 caracteres)
+        private const val LINE_WIDTH_80MM = 48
+        private const val LINE_WIDTH_55MM = 32
     }
 
     private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
+    private val lineWidth: Int by lazy { resolveLineWidth() }
+
+    private data class TicketTextLayout(
+        val qtyWidth: Int,
+        val descWidth: Int,
+        val amountWidth: Int
+    )
+
+    private fun resolveLineWidth(): Int {
+        return try {
+            val device = MerchantDevicesV2Connector(context).getDevice()
+            val rawDeviceInfo = listOfNotNull(
+                device?.deviceTypeName,
+                device?.productName,
+                device?.model
+            ).joinToString(" ").lowercase(Locale.US)
+
+            when {
+                rawDeviceInfo.contains("mini") || rawDeviceInfo.contains("flex") -> LINE_WIDTH_55MM
+                else -> LINE_WIDTH_80MM
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo detectar el modelo Clover, se usa 80mm por defecto", e)
+            LINE_WIDTH_80MM
+        }
+    }
+
+    private fun resolveTextLayout(): TicketTextLayout {
+        return if (lineWidth <= LINE_WIDTH_55MM) {
+            TicketTextLayout(
+                qtyWidth = 3,
+                descWidth = 11,
+                amountWidth = 7
+            )
+        } else {
+            TicketTextLayout(
+                qtyWidth = 5,
+                descWidth = 25,
+                amountWidth = 8
+            )
+        }
+    }
 
     /**
      * Imprime un ticket no fiscal
@@ -102,7 +146,7 @@ class PrintTextService(private val context: Context) {
         val lines = mutableListOf<String>()
 
         // Separador superior
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(lineWidth))
 
         // Número de pedido (formato similar al ejemplo)
         lines.add("TU NUMERO DE PEDIDO ES: ${ticket.orderNumber}")
@@ -124,13 +168,13 @@ class PrintTextService(private val context: Context) {
         // Separadores antes de la tabla
         if (ticket.isTakeAway != null) {
             lines.add(" ")
-            lines.add("-".repeat(LINE_WIDTH))
+            lines.add("-".repeat(lineWidth))
             lines.add(" ")
         }
 
         // Encabezado de la tabla
         lines.add(buildTableHeader())
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Items con subselecciones y comentarios
         ticket.items.forEach { item ->
@@ -155,14 +199,14 @@ class PrintTextService(private val context: Context) {
         }
 
         // Separador
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Total
         lines.add(buildTotalLine(ticket.total))
         lines.add("")
 
         // Separador
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(lineWidth))
         lines.add("")
 
         // Fecha y hora centrada
@@ -195,7 +239,7 @@ class PrintTextService(private val context: Context) {
         val tipoComprobante = ticket.tipoComprobante ?: "Recibo C"
         lines.add(centerText(tipoComprobante))
         lines.add("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}")
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(lineWidth))
 
         // Información del vendedor
         lines.add("RAZON SOCIAL: ${fiscalInfo.razonSocial}")
@@ -205,7 +249,7 @@ class PrintTextService(private val context: Context) {
         lines.add("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}")
         lines.add(fiscalInfo.responsable)
         lines.add("Inicio Actividades: ${fiscalInfo.inicioActividades}")
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Detalles de la transacción
         lines.add("FECHA: ${fiscalInfo.fecha}")
@@ -214,11 +258,11 @@ class PrintTextService(private val context: Context) {
         if (fiscalInfo.consumidorFinal) {
             lines.add("CONSUMIDOR FINAL")
         }
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Encabezado de la tabla
         lines.add(buildTableHeader())
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Items con subselecciones
         ticket.items.forEach { item ->
@@ -238,7 +282,7 @@ class PrintTextService(private val context: Context) {
         }
 
         // Separador
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
 
         // Total
         lines.add(buildTotalLine(ticket.total))
@@ -263,7 +307,7 @@ class PrintTextService(private val context: Context) {
             if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
                 // Intentar ponerlos en la misma línea si caben
                 val combined = "$caeText $fechaText"
-                if (combined.length <= LINE_WIDTH) {
+                if (combined.length <= lineWidth) {
                     lines.add(combined)
                 } else {
                     lines.add(caeText)
@@ -277,7 +321,7 @@ class PrintTextService(private val context: Context) {
         }
 
         // Separador antes del QR
-        lines.add("=".repeat(LINE_WIDTH))
+        lines.add("=".repeat(lineWidth))
         lines.add("")
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
@@ -288,7 +332,7 @@ class PrintTextService(private val context: Context) {
 
         // Separador después del QR
         lines.add(" ")
-        lines.add("-".repeat(LINE_WIDTH))
+        lines.add("-".repeat(lineWidth))
         lines.add("")
 
         // Footer
@@ -307,8 +351,9 @@ class PrintTextService(private val context: Context) {
      * Construye el encabezado de la tabla
      */
     private fun buildTableHeader(): String {
+        val layout = resolveTextLayout()
         return String.format(
-            "%-5s %-25s %-8s %-8s",
+            "%-${layout.qtyWidth}s %-${layout.descWidth}s %${layout.amountWidth}s %${layout.amountWidth}s",
             "Cant.",
             "Descripcion",
             "SubTot.",
@@ -320,7 +365,8 @@ class PrintTextService(private val context: Context) {
      * Construye una línea de item
      */
     private fun buildItemLine(item: TicketItem): String {
-        val maxDescLength = 25
+        val layout = resolveTextLayout()
+        val maxDescLength = layout.descWidth
         val desc = if (item.description.length > maxDescLength) {
             item.description.substring(0, maxDescLength - 3) + "..."
         } else {
@@ -329,7 +375,7 @@ class PrintTextService(private val context: Context) {
 
         // Formato: Cantidad | Descripción | Subtotal | Total
         return String.format(
-            "%-5d %-25s %8s %8s",
+            "%-${layout.qtyWidth}d %-${layout.descWidth}s %${layout.amountWidth}s %${layout.amountWidth}s",
             item.quantity,
             desc,
             formatCurrency(item.subtotal),
@@ -341,7 +387,8 @@ class PrintTextService(private val context: Context) {
      * Construye una línea de subselección
      */
     private fun buildSubselectionLine(subselection: TicketSubselection, parentQuantity: Int): String {
-        val maxDescLength = 25
+        val layout = resolveTextLayout()
+        val maxDescLength = layout.descWidth
         val desc = if (subselection.name.length > maxDescLength) {
             subselection.name.substring(0, maxDescLength - 3) + "..."
         } else {
@@ -351,7 +398,8 @@ class PrintTextService(private val context: Context) {
         // Formato: espacio | "nombre x cantidad" | precio unitario | total
         val subDesc = "$desc x ${subselection.quantity}"
         return String.format(
-            "     %-25s %8s %8s",
+            "%-${layout.qtyWidth}s %-${layout.descWidth}s %${layout.amountWidth}s %${layout.amountWidth}s",
+            "",
             subDesc,
             formatCurrency(subselection.price),
             formatCurrency(subselection.total)
@@ -365,6 +413,9 @@ class PrintTextService(private val context: Context) {
         // Formatear como moneda y remover el símbolo $ duplicado si existe
         val formatted = formatCurrency(total)
         val totalText = if (formatted.startsWith("$")) formatted else "\$$formatted"
+        if (lineWidth <= LINE_WIDTH_55MM) {
+            return "Total: $totalText"
+        }
         return String.format(
             "%-35s %13s",
             "Total:",
@@ -384,10 +435,10 @@ class PrintTextService(private val context: Context) {
      */
     private fun centerText(text: String): String {
         // Si el texto es más largo que el ancho de línea, simplemente retornarlo sin centrar
-        if (text.length >= LINE_WIDTH) {
+        if (text.length >= lineWidth) {
             return text
         }
-        val padding = (LINE_WIDTH - text.length) / 2
+        val padding = (lineWidth - text.length) / 2
         // Asegurarse de que padding nunca sea negativo
         val safePadding = maxOf(0, padding)
         return " ".repeat(safePadding) + text

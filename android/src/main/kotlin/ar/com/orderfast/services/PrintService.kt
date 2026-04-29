@@ -21,6 +21,7 @@ import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.ImagePrintJob2
 import com.clover.sdk.v1.printer.job.ViewPrintJob
+import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
 
 import android.os.Handler
 import android.os.HandlerThread
@@ -38,9 +39,10 @@ class PrintService(private val context: Context) {
 
     companion object {
         private const val TAG = "PrintService"
-        private const val DEFAULT_PRINTER_WIDTH = 576 // Papel 80mm
-        private const val LINE_WIDTH = DEFAULT_PRINTER_WIDTH
-        private const val LINE_CHAR = 22
+        private const val PRINTER_WIDTH_80MM = 576
+        private const val PRINTER_WIDTH_55MM = 384
+        private const val LINE_CHAR_80MM = 22
+        private const val LINE_CHAR_55MM = 14
         /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
         private const val SHORT_SEP_LENGTH = 20
         /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
@@ -55,6 +57,17 @@ class PrintService(private val context: Context) {
         /** Altura máxima en píxeles para ImagePrintJob2 (Clover SDK). */
         private const val IMAGE_MAX_HEIGHT = 2048
     }
+
+    private enum class PaperProfile {
+        MM55,
+        MM80
+    }
+
+    private val currentPaperProfile: PaperProfile by lazy { detectPaperProfile() }
+    private val printerWidthPx: Int
+        get() = if (currentPaperProfile == PaperProfile.MM55) PRINTER_WIDTH_55MM else PRINTER_WIDTH_80MM
+    private val lineCharCount: Int
+        get() = if (currentPaperProfile == PaperProfile.MM55) LINE_CHAR_55MM else LINE_CHAR_80MM
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
     private val robotoMono: Typeface by lazy {
@@ -77,6 +90,25 @@ class PrintService(private val context: Context) {
 
     private fun formatCurrency(amount: Double): String = "\$ ${numberFormat.format(amount)}"
 
+    private fun detectPaperProfile(): PaperProfile {
+        return try {
+            val device = MerchantDevicesV2Connector(context).getDevice()
+            val rawDeviceInfo = listOfNotNull(
+                device?.deviceTypeName,
+                device?.productName,
+                device?.model
+            ).joinToString(" ").lowercase(Locale.US)
+
+            when {
+                rawDeviceInfo.contains("mini") || rawDeviceInfo.contains("flex") -> PaperProfile.MM55
+                else -> PaperProfile.MM80
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo detectar el modelo Clover, se usa 80mm por defecto", e)
+            PaperProfile.MM80
+        }
+    }
+
     // HandlerThread para ejecutar operaciones de impresión en segundo plano
     private val printThread = HandlerThread("PrintThread").apply { start() }
     private val printHandler = Handler(printThread.looper)
@@ -97,9 +129,7 @@ class PrintService(private val context: Context) {
         // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
         printHandler.post {
             try {
-                // Usar ancho por defecto para papel de 80mm (576 puntos)
-                // El ViewPrintJob ajustará automáticamente el layout
-                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val printerWidth = printerWidthPx
                 val view = createNonFiscalTicketView(ticket, printerWidth)
 
                 // Medir y layout el View antes de pasarlo a ViewPrintJob
@@ -145,7 +175,7 @@ class PrintService(private val context: Context) {
 
         printHandler.post {
             try {
-                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val printerWidth = printerWidthPx
                 val view = createCashTicketView(ticket, printerWidth)
 
                 val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
@@ -190,9 +220,7 @@ class PrintService(private val context: Context) {
         // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
         printHandler.post {
             try {
-                // Usar ancho por defecto para papel de 80mm (576 puntos)
-                // El ViewPrintJob ajustará automáticamente el layout
-                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val printerWidth = printerWidthPx
                 val view = createFiscalTicketView(ticket, printerWidth)
 
                 // Medir y layout el View antes de pasarlo a ViewPrintJob
@@ -817,8 +845,9 @@ class PrintService(private val context: Context) {
      * @param length Si no es null, número de caracteres (línea corta). Si es null, usa fullWidth.
      * @param fullWidth Ancho en puntos para línea larga cuando length == null.
      */
-    private fun createSeparatorLine(character: String, length: Int? = null, fullWidth: Int = DEFAULT_PRINTER_WIDTH): TextView {
-        val charCount = length ?: (fullWidth / 8).coerceAtLeast(1)
+    private fun createSeparatorLine(character: String, length: Int? = null, fullWidth: Int? = null): TextView {
+        val effectiveWidth = fullWidth ?: printerWidthPx
+        val charCount = length ?: (effectiveWidth / 8).coerceAtLeast(1)
         val line = character.repeat(charCount)
         return TextView(context).apply {
             text = line
@@ -860,7 +889,7 @@ class PrintService(private val context: Context) {
         val tipoComprobante = ticket.tipoComprobante ?: "Recibo C"
         lines.add(centerText(tipoComprobante))
         lines.add("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}")
-        lines.add("=".repeat(LINE_CHAR))
+        lines.add("=".repeat(lineCharCount))
 
         // Información del vendedor
         lines.add("RAZON SOCIAL: ${fiscalInfo.razonSocial}")
@@ -870,7 +899,7 @@ class PrintService(private val context: Context) {
         lines.add("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}")
         lines.add(fiscalInfo.responsable)
         lines.add("Inicio Actividades: ${fiscalInfo.inicioActividades}")
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
 
         // Detalles de la transacción
         lines.add("FECHA: ${fiscalInfo.fecha}")
@@ -879,11 +908,11 @@ class PrintService(private val context: Context) {
         if (fiscalInfo.consumidorFinal) {
             lines.add("CONSUMIDOR FINAL")
         }
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
 
         // Encabezado de la tabla
         lines.add(buildTableHeader())
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
 
         // Items con subselecciones
         ticket.items.forEach { item ->
@@ -903,7 +932,7 @@ class PrintService(private val context: Context) {
         }
 
         // Separador
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
 
         // Total
         lines.add(buildTotalLine(ticket.total))
@@ -928,7 +957,7 @@ class PrintService(private val context: Context) {
             if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
                 // Intentar ponerlos en la misma línea si caben
                 val combined = "$caeText $fechaText"
-                if (combined.length <= LINE_CHAR) {
+                if (combined.length <= lineCharCount) {
                     lines.add(combined)
                 } else {
                     lines.add(caeText)
@@ -942,7 +971,7 @@ class PrintService(private val context: Context) {
         }
 
         // Separador antes del QR
-        lines.add("=".repeat(LINE_CHAR))
+        lines.add("=".repeat(lineCharCount))
         lines.add("")
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
@@ -953,7 +982,7 @@ class PrintService(private val context: Context) {
 
         // Separador después del QR
         lines.add(" ")
-        lines.add("-".repeat(LINE_CHAR))
+        lines.add("-".repeat(lineCharCount))
         lines.add("")
 
         // Footer
@@ -1132,10 +1161,10 @@ class PrintService(private val context: Context) {
      */
     private fun centerText(text: String): String {
         // Si el texto es más largo que el ancho de línea, simplemente retornarlo sin centrar
-        if (text.length >= LINE_CHAR) {
+        if (text.length >= lineCharCount) {
             return text
         }
-        val padding = (LINE_CHAR - text.length) / 2
+        val padding = (lineCharCount - text.length) / 2
         // Asegurarse de que padding nunca sea negativo
         val safePadding = maxOf(0, padding)
         return " ".repeat(safePadding) + text

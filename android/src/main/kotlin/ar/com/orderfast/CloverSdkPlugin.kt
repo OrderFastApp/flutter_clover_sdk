@@ -21,6 +21,7 @@ import ar.com.orderfast.services.ScreensaverService
 import ar.com.orderfast.services.PrintService
 import android.content.ComponentName
 import ar.com.orderfast.services.PrintTextService
+import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -132,6 +133,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             // Inicializar el servicio de texto en impresora
             printTextService = PrintTextService(context)
 
+            logCloverDeviceModel()
+
             val response = mapOf(
                 "success" to true,
                 "message" to "SDK inicializado correctamente"
@@ -141,6 +144,22 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         } catch (e: Exception) {
             Log.e(TAG, "Error al inicializar SDK", e)
             result.error("INIT_ERROR", e.message, null)
+        }
+    }
+
+    private fun logCloverDeviceModel() {
+        try {
+            val device = MerchantDevicesV2Connector(context).getDevice()
+            val deviceTypeName = device?.deviceTypeName ?: "unknown"
+            val productName = device?.productName ?: "unknown"
+            val model = device?.model ?: "unknown"
+
+            Log.d(
+                TAG,
+                "Clover device detected -> type: $deviceTypeName, product: $productName, model: $model"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo obtener el modelo del dispositivo Clover al inicializar", e)
         }
     }
 

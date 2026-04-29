@@ -130,6 +130,51 @@ class PrintService(private val context: Context) {
     }
 
     /**
+     * Imprime un ticket de caja (cash ticket) con formato abreviado.
+     * Recibe el mismo modelo de datos que el ticket no fiscal.
+     */
+    fun printCashTicket(ticket: NonFiscalTicket, callback: (PrintTicketResponse) -> Unit) {
+        val account: Account = CloverAccount.getAccount(context)
+            ?: run {
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = "No se pudo obtener la cuenta de Clover"
+                ))
+                return
+            }
+
+        printHandler.post {
+            try {
+                val printerWidth = DEFAULT_PRINTER_WIDTH
+                val view = createCashTicketView(ticket, printerWidth)
+
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                view.measure(widthSpec, heightSpec)
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+
+                val printJob = ViewPrintJob.Builder()
+                    .view(view, printerWidth)
+                    .build()
+
+                printJob.print(context, account)
+
+                Log.d(TAG, "Cash ticket enviado a impresión: ${ticket.orderNumber}")
+                callback(PrintTicketResponse(
+                    success = true,
+                    message = "Cash ticket impreso correctamente"
+                ))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al imprimir cash ticket", e)
+                callback(PrintTicketResponse(
+                    success = false,
+                    error = e.message ?: "Error desconocido al imprimir"
+                ))
+            }
+        }
+    }
+
+    /**
      * Imprime un ticket fiscal
      */
     fun printFiscalTicket(ticket: FiscalTicket, callback: (PrintTicketResponse) -> Unit) {
@@ -318,6 +363,50 @@ class PrintService(private val context: Context) {
         layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
 
         // Espacio final
+        layout.addView(createEmptyLine())
+        layout.addView(createEmptyLine())
+
+        return layout
+    }
+
+    /**
+     * Crea un View para ticket de caja con formato resumido.
+     */
+    private fun createCashTicketView(ticket: NonFiscalTicket, width: Int): View {
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createOrderNumberCashLine(ticket.orderNumber))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
+        layout.addView(createEmptyLine())
+        layout.addView(createCenteredBoldLargeTextView("POR FAVOR ABONAR EN CAJA"))
+        layout.addView(createEmptyLine())
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createEmptyLine())
+
+        if (ticket.isTakeAway != null) {
+            val preferencia = if (ticket.isTakeAway == true) "PARA LLEVAR" else "PARA COMER AQUI"
+            layout.addView(createBoldTextView("PREFERENCIA: $preferencia"))
+            layout.addView(createEmptyLine())
+        }
+
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
+        layout.addView(createTotalLineView(ticket.total))
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+        layout.addView(createEmptyLine())
+        layout.addView(createCenteredTextView("----- ${ticket.dateTime} -----"))
+        layout.addView(createEmptyLine())
+        layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
+        layout.addView(createCenteredBoldTextView("COMPROBANTE NO FISCAL,"))
+        layout.addView(createCenteredBoldTextView("NO VALIDO COMO FACTURA."))
+        layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
         layout.addView(createEmptyLine())
         layout.addView(createEmptyLine())
 
@@ -969,6 +1058,46 @@ class PrintService(private val context: Context) {
                 1f
             )
         })
+        return row
+    }
+
+    /**
+     * Fila del ticket de caja: texto a la izquierda y número de pedido a la derecha.
+     */
+    private fun createOrderNumberCashLine(orderNumber: String): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 6, 0, 6)
+            }
+        }
+
+        row.addView(TextView(context).apply {
+            text = "TU NUMERO DE PEDIDO ES"
+            typeface = robotoMonoBold
+            textSize = 30f
+            gravity = Gravity.START
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        })
+
+        row.addView(TextView(context).apply {
+            text = orderNumber.uppercase()
+            typeface = robotoMonoBold
+            textSize = 30f
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+
         return row
     }
 

@@ -458,6 +458,29 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Imprime un ticket de caja con formato abreviado.
+  ///
+  /// Recibe el mismo payload que `printTicket(nonFiscalTicket: ...)`.
+  Future<PrintTicketResponse> printCashTicket({
+    required dynamic nonFiscalTicket,
+  }) async {
+    try {
+      final ticketPayload = nonFiscalTicket is NonFiscalTicket
+          ? nonFiscalTicket.toMap()
+          : nonFiscalTicket;
+
+      final result = await _channel.invokeMethod('printCashTicket', {
+        'nonFiscalTicket': ticketPayload,
+      });
+      return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
+    } catch (e) {
+      return PrintTicketResponse(
+        success: false,
+        error: e.toString(),
+      );
+    }
+  }
+
   /// Imprime un ticket no fiscal a partir del JSON de la orden (API).
   ///
   /// Acepta el mismo formato que devuelve la API: [order_items], [order_sub_selection]

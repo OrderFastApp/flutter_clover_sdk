@@ -80,6 +80,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "isScreensaverEnabled" -> isScreensaverEnabled(result)
                 "isScreensaverSupported" -> isScreensaverSupported(result)
                 "printTicket" -> printTicket(call, result)
+                "printCashTicket" -> printCashTicket(call, result)
                 "printTextTicket" -> printTextTicket(call, result)
                 "printImage" -> printImage(call, result)
                 else -> result.notImplemented()
@@ -690,6 +691,36 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error al imprimir ticket", e)
+            result.error("PRINT_ERROR", e.message, null)
+        }
+    }
+
+    private fun printCashTicket(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val printContext = activity ?: context
+            if (printService == null) {
+                printService = PrintService(printContext)
+            }
+
+            val nonFiscalData = call.argument<Map<String, Any>>("nonFiscalTicket")
+                ?: run {
+                    result.error("MISSING_TICKET", "Debe proporcionar nonFiscalTicket", null)
+                    return
+                }
+
+            val ticket = parseNonFiscalTicket(nonFiscalData)
+            printService?.printCashTicket(ticket) { response ->
+                if (response.success) {
+                    result.success(mapOf(
+                        "success" to true,
+                        "message" to response.message
+                    ))
+                } else {
+                    result.error("PRINT_ERROR", response.error, null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al imprimir cash ticket", e)
             result.error("PRINT_ERROR", e.message, null)
         }
     }

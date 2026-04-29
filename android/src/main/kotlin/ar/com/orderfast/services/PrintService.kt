@@ -68,6 +68,8 @@ class PrintService(private val context: Context) {
         get() = if (currentPaperProfile == PaperProfile.MM55) PRINTER_WIDTH_55MM else PRINTER_WIDTH_80MM
     private val lineCharCount: Int
         get() = if (currentPaperProfile == PaperProfile.MM55) LINE_CHAR_55MM else LINE_CHAR_80MM
+    private val is55mmPaper: Boolean
+        get() = currentPaperProfile == PaperProfile.MM55
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
     private val robotoMono: Typeface by lazy {
@@ -411,10 +413,20 @@ class PrintService(private val context: Context) {
 
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        layout.addView(createOrderNumberCashLine(ticket.orderNumber))
+        if (is55mmPaper) {
+            layout.addView(createCenteredBoldTextView("TU NUMERO DE PEDIDO"))
+            layout.addView(createCenteredBoldLargeTextView(ticket.orderNumber.uppercase()))
+        } else {
+            layout.addView(createOrderNumberCashLine(ticket.orderNumber))
+        }
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
         layout.addView(createEmptyLine())
-        layout.addView(createCenteredBoldLargeTextView("POR FAVOR ABONAR EN CAJA"))
+        if (is55mmPaper) {
+            layout.addView(createCenteredBoldTextView("POR FAVOR ABONAR"))
+            layout.addView(createCenteredBoldTextView("EN CAJA"))
+        } else {
+            layout.addView(createCenteredBoldLargeTextView("POR FAVOR ABONAR EN CAJA"))
+        }
         layout.addView(createEmptyLine())
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
         layout.addView(createEmptyLine())
@@ -740,12 +752,12 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 27f
+            textSize = if (is55mmPaper) 20f else 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 4, 0, 4)
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
             }
         }
     }
@@ -757,12 +769,12 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 27f
+            textSize = if (is55mmPaper) 20f else 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 4, 0, 4)
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
             }
         }
     }
@@ -774,12 +786,12 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 27f
+            textSize = if (is55mmPaper) 22f else 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 6, 0, 6)
+                setMargins(0, if (is55mmPaper) 3 else 6, 0, if (is55mmPaper) 3 else 6)
             }
         }
     }
@@ -791,14 +803,14 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMono
-            textSize = 27f
+            textSize = if (is55mmPaper) 20f else 27f
 
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 4, 0, 4)
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
             }
         }
     }
@@ -810,13 +822,13 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 24f
+            textSize = if (is55mmPaper) 19f else 24f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 4, 0, 4)
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
             }
         }
     }
@@ -828,13 +840,13 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             this.text = text.uppercase()
             typeface = robotoMonoBold
-            textSize = 27f
+            textSize = if (is55mmPaper) 22f else 27f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 8, 0, 8)
+                setMargins(0, if (is55mmPaper) 4 else 8, 0, if (is55mmPaper) 4 else 8)
             }
         }
     }
@@ -852,12 +864,12 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             text = line
             typeface = robotoMono
-            textSize = 27f
+            textSize = if (is55mmPaper) 20f else 27f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 4, 0, 4)
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
             }
         }
     }
@@ -872,7 +884,7 @@ class PrintService(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 2, 0, 2)
+                setMargins(0, if (is55mmPaper) 0 else 2, 0, if (is55mmPaper) 0 else 2)
             }
         }
     }
@@ -1061,14 +1073,14 @@ class PrintService(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 6, 0, 6)
+                setMargins(0, if (is55mmPaper) 3 else 6, 0, if (is55mmPaper) 3 else 6)
             }
         }
         // TOTAL: pegado a la izquierda
         row.addView(TextView(context).apply {
             text = "TOTAL:"
             typeface = robotoMonoBold
-            textSize = 30f
+            textSize = if (is55mmPaper) 22f else 30f
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1079,7 +1091,7 @@ class PrintService(private val context: Context) {
         row.addView(TextView(context).apply {
             text = totalText
             typeface = robotoMonoBold
-            textSize = 30f
+            textSize = if (is55mmPaper) 22f else 30f
             gravity = Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -1100,14 +1112,14 @@ class PrintService(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 6, 0, 6)
+                setMargins(0, if (is55mmPaper) 3 else 6, 0, if (is55mmPaper) 3 else 6)
             }
         }
 
         row.addView(TextView(context).apply {
             text = "TU NUMERO DE PEDIDO ES"
             typeface = robotoMonoBold
-            textSize = 30f
+            textSize = if (is55mmPaper) 22f else 30f
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -1119,7 +1131,7 @@ class PrintService(private val context: Context) {
         row.addView(TextView(context).apply {
             text = orderNumber.uppercase()
             typeface = robotoMonoBold
-            textSize = 30f
+            textSize = if (is55mmPaper) 22f else 30f
             gravity = Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,

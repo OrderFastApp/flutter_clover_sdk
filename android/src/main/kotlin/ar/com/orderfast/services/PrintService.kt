@@ -549,9 +549,9 @@ class PrintService(private val context: Context) {
         return TextView(context).apply {
             text = "-".repeat(lineCharCount) // o SHORT_SEP_LENGTH si querés
             typeface = robotoMono
-            textSize = 27f
+            textSize = if (is55mmPaper) 13f else 16f
             includeFontPadding = false
-            setPadding(2, 4, 2, 4)
+            setPadding(2, 2, 2, 2)
             layoutParams = TableLayout.LayoutParams(
                 TableLayout.LayoutParams.MATCH_PARENT,
                 TableLayout.LayoutParams.WRAP_CONTENT
@@ -617,10 +617,10 @@ class PrintService(private val context: Context) {
             this.text = text
             this.gravity = gravity
             typeface = if (bold) robotoMonoBold else robotoMono
-            textSize = 27f
+            textSize = if (is55mmPaper) 14f else 17f
             includeFontPadding = false
             layoutParams = lp
-            setPadding(2, 4, 2, 4)
+            setPadding(2, 2, 2, 2)
 
             // Importante para tickets: que no refluya raro
             isSingleLine = singleLine

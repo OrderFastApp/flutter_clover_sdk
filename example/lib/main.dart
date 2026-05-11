@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:clover_sdk/clover_sdk.dart';
+import 'package:clover_sdk/models/models.dart';
+
+/// PNG 1×1 transparente (mínimo) para probar [CloverSdkPlugin.printImage].
+const String _kTinyPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 void main() {
   runApp(const MyApp());
@@ -17,6 +22,27 @@ class _MyAppState extends State<MyApp> {
   String _status = 'No inicializado';
   bool _deviceConnected = false;
   Map<String, dynamic>? _lastPayment;
+  Map<String, dynamic>? _lastQrPayment;
+
+  static const Map<String, dynamic> _sampleOrderForPrint = {
+    'id': 'order-demo-1',
+    'created_at': '2026-05-11T12:00:00.000Z',
+    'total': 15.5,
+    'order_items': [
+      {
+        'name': 'Café',
+        'price': 5.0,
+        'quantity': 2,
+        'order_sub_selection': <Map<String, dynamic>>[],
+      },
+      {
+        'name': 'Medialunas',
+        'price': 5.5,
+        'quantity': 1,
+        'order_sub_selection': <Map<String, dynamic>>[],
+      },
+    ],
+  };
 
   @override
   void initState() {
@@ -51,20 +77,33 @@ class _MyAppState extends State<MyApp> {
     _cloverSdk.onSaleResponse = (response) {
       setState(() {
         if (response['success'] == true) {
-          _status = 'Pago Exitoso';
-          _lastPayment = response['payment'];
+          _status = 'Pago Exitoso (sale)';
+          _lastPayment = response['payment'] != null
+              ? Map<String, dynamic>.from(response['payment'] as Map)
+              : null;
         } else {
-          _status = 'Error: ${response['reason']} - ${response['message']}';
+          _status =
+              'Sale: ${response['reason']} — ${response['message'] ?? ''}';
+        }
+      });
+    };
+
+    _cloverSdk.onQrPaymentResponse = (response) {
+      setState(() {
+        _lastQrPayment = Map<String, dynamic>.from(response);
+        if (response['success'] == true) {
+          _status = 'Pago QR completado';
+        } else {
+          _status =
+              'QR: ${response['reason'] ?? response['message'] ?? response}';
         }
       });
     };
   }
 
   Future<void> _initializeSDK() async {
-    // IMPORTANTE: Reemplaza 'TU_RAID_AQUI' con tu Remote Application ID
-    // Obtén tu RAID desde: https://www.clover.com/developers
     final result = await _cloverSdk.initialize(
-      remoteApplicationId: 'TU_RAID_AQUI', // Reemplaza con tu RAID
+      remoteApplicationId: 'TU_RAID_AQUI',
     );
 
     if (result['success'] != true) {
@@ -74,21 +113,40 @@ class _MyAppState extends State<MyApp> {
       return;
     }
 
-    // Mantener la pantalla encendida (útil para aplicaciones POS)
     await _cloverSdk.keepScreenOn(keepOn: true);
-
-    // Activar modo inmersivo para ocultar barras del sistema (opcional)
     await _cloverSdk.setImmersiveMode(
       hideStatusBar: true,
       hideNavigationBar: true,
     );
+  }
 
-    // Activar modo kiosco para bloquear el sistema (opcional)
-    // IMPORTANTE: Solo descomenta esto si necesitas bloquear completamente el sistema
-    // await _cloverSdk.enableKioskMode(
-    //   unlockCode: 'MI_CODIGO_SECRETO',
-    //   enableScreenPinning: true,
-    // );
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _invokeMap(String label, Future<Map<String, dynamic>> call) async {
+    final r = await call;
+    if (!mounted) return;
+    final ok = r['success'] == true;
+    final detail = ok
+        ? (r.keys.where((k) => k != 'success').map((k) => '$k: ${r[k]}').join(', '))
+        : '${r['error'] ?? r}';
+    setState(() {
+      _status = '$label → ${ok ? 'OK' : 'Error'}${detail.isNotEmpty ? ': $detail' : ''}';
+    });
+    _toast('$label: ${ok ? 'OK' : 'falló'}');
+  }
+
+  Future<void> _invokePrint(String label, Future<PrintTicketResponse> call) async {
+    final r = await call;
+    if (!mounted) return;
+    setState(() {
+      _status = '$label → ${r.success ? 'OK' : 'Error: ${r.error ?? ''}'}';
+    });
+    _toast('$label: ${r.success ? 'OK' : (r.error ?? 'error')}');
   }
 
   Future<void> _processPayment(double amount) async {
@@ -103,12 +161,116 @@ class _MyAppState extends State<MyApp> {
     final externalId = 'order_${DateTime.now().millisecondsSinceEpoch}';
 
     setState(() {
-      _status = 'Procesando pago de \$${amount.toStringAsFixed(2)}...';
+      _status = 'Procesando pago de ${amount.toStringAsFixed(2)} USD...';
     });
 
     await _cloverSdk.sale(
       amount: amountInCents,
       externalId: externalId,
+    );
+  }
+
+  Future<void> _printCashTicketSample() async {
+    final ts = DateTime.now().toIso8601String();
+    await _invokePrint(
+      'printCashTicket',
+      _cloverSdk.printCashTicket(
+        nonFiscalTicket: {
+          'orderNumber': 'CASH',
+          'items': [
+            {
+              'quantity': 1,
+              'description': 'Ejemplo caja',
+              'subtotal': 10.0,
+              'total': 10.0,
+            },
+          ],
+          'total': 10.0,
+          'dateTime': ts,
+        },
+      ),
+    );
+  }
+
+  Future<void> _presentQr(double dollars) async {
+    if (!_deviceConnected) {
+      setState(() => _status = 'QR: dispositivo no conectado');
+      return;
+    }
+    final cents = (dollars * 100).toInt();
+    await _invokeMap(
+      'presentQrCode',
+      _cloverSdk.presentQrCode(
+        amount: cents,
+        externalId: 'qr_${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+  }
+
+  Future<void> _dialogDreamComponent() async {
+    final pkgCtrl = TextEditingController();
+    final clsCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('setScreensaverDreamComponent'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: pkgCtrl,
+              decoration: const InputDecoration(labelText: 'packageName'),
+            ),
+            TextField(
+              controller: clsCtrl,
+              decoration: const InputDecoration(labelText: 'className'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enviar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (pkgCtrl.text.isEmpty || clsCtrl.text.isEmpty) {
+      _toast('Completá package y class');
+      return;
+    }
+    await _invokeMap(
+      'setScreensaverDreamComponent',
+      _cloverSdk.setScreensaverDreamComponent(
+        packageName: pkgCtrl.text.trim(),
+        className: clsCtrl.text.trim(),
+      ),
+    );
+  }
+
+  Widget _section(String title, List<Widget> children) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _btn(String text, VoidCallback? onPressed) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: OutlinedButton(onPressed: onPressed, child: Text(text)),
     );
   }
 
@@ -119,14 +281,14 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Clover SDK Example'),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -141,7 +303,7 @@ class _MyAppState extends State<MyApp> {
                             child: Text(
                               _status,
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -149,38 +311,134 @@ class _MyAppState extends State<MyApp> {
                         ],
                       ),
                       if (_lastPayment != null) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         const Divider(),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Último Pago:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
+                        const Text('Último pago (sale):',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                         Text('ID: ${_lastPayment!['id']}'),
-                        Text('Monto: \$${(_lastPayment!['amount']! / 100).toStringAsFixed(2)}'),
+                        Text(
+                          'Monto: ${(((_lastPayment!['amount'] as num?) ?? 0) / 100).toStringAsFixed(2)}',
+                        ),
                         if (_lastPayment!['tipAmount'] != null)
-                          Text('Propina: \$${(_lastPayment!['tipAmount']! / 100).toStringAsFixed(2)}'),
+                          Text(
+                            'Propina: ${(((_lastPayment!['tipAmount'] as num?) ?? 0) / 100).toStringAsFixed(2)}',
+                          ),
+                      ],
+                      if (_lastQrPayment != null) ...[
+                        const SizedBox(height: 12),
+                        const Divider(),
+                        const Text('Última respuesta QR:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(_lastQrPayment.toString(),
+                            style: const TextStyle(fontSize: 12)),
                       ],
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _deviceConnected ? () => _processPayment(10.00) : null,
-                child: const Text('Pagar \$10.00'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: _deviceConnected ? () => _processPayment(25.50) : null,
-                child: const Text('Pagar \$25.50'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: _deviceConnected ? () => _processPayment(50.00) : null,
-                child: const Text('Pagar \$50.00'),
-              ),
+              _section('Pagos (requiere dispositivo conectado)', [
+                _btn('Pagar 10.00 USD',
+                    _deviceConnected ? () => _processPayment(10) : null),
+                _btn('Pagar 25.50 USD',
+                    _deviceConnected ? () => _processPayment(25.5) : null),
+                _btn('Pagar 50.00 USD',
+                    _deviceConnected ? () => _processPayment(50) : null),
+                _btn('Presentar QR 5.00 USD',
+                    _deviceConnected ? () => _presentQr(5) : null),
+              ]),
+              _section('Pantalla / inmersivo', [
+                _btn('keepScreenOn(true)',
+                    () => _invokeMap('keepScreenOn', _cloverSdk.keepScreenOn(keepOn: true))),
+                _btn('keepScreenOn(false)',
+                    () => _invokeMap('keepScreenOn', _cloverSdk.keepScreenOn(keepOn: false))),
+                _btn('releaseScreenOn',
+                    () => _invokeMap('releaseScreenOn', _cloverSdk.releaseScreenOn())),
+                _btn('setImmersiveMode (ocultar barras)',
+                    () => _invokeMap(
+                          'setImmersiveMode',
+                          _cloverSdk.setImmersiveMode(
+                            hideStatusBar: true,
+                            hideNavigationBar: true,
+                          ),
+                        )),
+                _btn('exitImmersiveMode',
+                    () => _invokeMap('exitImmersiveMode', _cloverSdk.exitImmersiveMode())),
+              ]),
+              _section('Modo kiosco (¡cuidado en dispositivo real!)', [
+                _btn('enableKioskMode',
+                    () => _invokeMap('enableKioskMode', _cloverSdk.enableKioskMode())),
+                _btn('disableKioskMode',
+                    () => _invokeMap('disableKioskMode', _cloverSdk.disableKioskMode())),
+                _btn('isKioskModeActive',
+                    () => _invokeMap('isKioskModeActive', _cloverSdk.isKioskModeActive())),
+              ]),
+              _section('Screensaver', [
+                _btn(
+                    'enableScreensaver',
+                    () => _invokeMap(
+                          'enableScreensaver',
+                          _cloverSdk.enableScreensaver(activateOnSleep: true),
+                        )),
+                _btn('disableScreensaver',
+                    () => _invokeMap('disableScreensaver', _cloverSdk.disableScreensaver())),
+                _btn('startScreensaver',
+                    () => _invokeMap('startScreensaver', _cloverSdk.startScreensaver())),
+                _btn('isScreensaverEnabled',
+                    () => _invokeMap('isScreensaverEnabled', _cloverSdk.isScreensaverEnabled())),
+                _btn('isScreensaverSupported',
+                    () => _invokeMap('isScreensaverSupported', _cloverSdk.isScreensaverSupported())),
+                _btn('setScreensaverDreamComponent…', _dialogDreamComponent),
+              ]),
+              _section('Impresión', [
+                _btn(
+                    'printTestNonFiscalTicket',
+                    () => _invokePrint('printTestNonFiscalTicket',
+                        _cloverSdk.printTestNonFiscalTicket())),
+                _btn(
+                    'printTestNonFiscalTicket (texto)',
+                    () => _invokePrint(
+                        'printTestNonFiscalTicket texto',
+                        _cloverSdk.printTestNonFiscalTicket(textTicket: true))),
+                _btn(
+                    'printTestFiscalTicket',
+                    () => _invokePrint(
+                        'printTestFiscalTicket', _cloverSdk.printTestFiscalTicket())),
+                _btn(
+                    'printTestFiscalTicket (texto)',
+                    () => _invokePrint(
+                        'printTestFiscalTicket texto',
+                        _cloverSdk.printTestFiscalTicket(textTicket: true))),
+                _btn('printCashTicket', _printCashTicketSample),
+                _btn(
+                    'printOrderTicket (JSON orden)',
+                    () => _invokePrint(
+                          'printOrderTicket',
+                          _cloverSdk.printOrderTicket(order: _sampleOrderForPrint),
+                        )),
+                _btn(
+                    'printOrderTicket (texto)',
+                    () => _invokePrint(
+                          'printOrderTicket texto',
+                          _cloverSdk.printOrderTicket(
+                            order: _sampleOrderForPrint,
+                            textTicket: true,
+                          ),
+                        )),
+                _btn(
+                    'printImage (PNG 1×1)',
+                    () => _invokePrint(
+                          'printImage',
+                          _cloverSdk.printImage(imageBase64: _kTinyPngBase64),
+                        )),
+              ]),
+              _section('SDK', [
+                _btn(
+                    'initialize (reintentar)',
+                    () => _invokeMap(
+                          'initialize',
+                          _cloverSdk.initialize(remoteApplicationId: 'TU_RAID_AQUI'),
+                        )),
+              ]),
             ],
           ),
         ),

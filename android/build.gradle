@@ -34,7 +34,6 @@ allprojects {
     repositories {
         mavenCentral()
         google()
-        jcenter()
     }
 }
 
@@ -78,6 +77,7 @@ android {
 
         implementation 'com.clover.sdk:clover-android-sdk:329'
         implementation 'com.clover.sdk:clover-android-connector-sdk:329'
+        implementation 'com.google.zxing:core:3.5.3'
     }
 
     testOptions {
@@ -92,4 +92,3 @@ android {
         }
     }
 }
-

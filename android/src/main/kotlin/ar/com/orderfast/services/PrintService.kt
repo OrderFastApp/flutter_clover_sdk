@@ -4,20 +4,20 @@ import android.accounts.Account
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.Typeface
 import android.util.Base64
 import android.util.Log
+import android.graphics.drawable.BitmapDrawable
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.widget.TableLayout
-import android.widget.TableRow
 import android.widget.TextView
 import ar.com.orderfast.models.FiscalTicket
 import ar.com.orderfast.models.NonFiscalTicket
 import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.models.TicketItem
-import ar.com.orderfast.models.TicketSubselection
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.ImagePrintJob2
 import com.clover.sdk.v1.printer.job.ViewPrintJob
@@ -25,13 +25,16 @@ import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.widget.ImageView
 import androidx.core.content.res.ResourcesCompat
 import ar.com.orderfast.R
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
-
 /**
  * Servicio para manejar la impresión de tickets con Clover
  */
@@ -49,11 +52,6 @@ class PrintService(private val context: Context) {
         private const val TOP_EQ_LENGTH = 20
         /** Asteriscos que enmarcan el disclaimer. */
         private const val ASTERISK_LENGTH = 20
-        /** Pesos de columnas de la tabla (CANT, DESCRIPCION, SUBTOT., TOTAL). */
-        private const val COL_WEIGHT_CANT = 0.4f    // era 0.2f - muy estrecho
-        private const val COL_WEIGHT_DESC = 1.6f    // era 1.4f
-        private const val COL_WEIGHT_SUBTOT = 0.9f  // era 1.0f
-        private const val COL_WEIGHT_TOTAL = 0.9f   // era 1.0f
         /** Altura máxima en píxeles para ImagePrintJob2 (Clover SDK). */
         private const val IMAGE_MAX_HEIGHT = 2048
     }
@@ -70,6 +68,77 @@ class PrintService(private val context: Context) {
         get() = if (currentPaperProfile == PaperProfile.MM55) LINE_CHAR_55MM else LINE_CHAR_80MM
     private val is55mmPaper: Boolean
         get() = currentPaperProfile == PaperProfile.MM55
+
+    /** Anchos fijos en caracteres monoespaciados (CANT + DESCR + SUBTOT + TOTAL). */
+    private data class TicketColumns(
+        val qty: Int,
+        val desc: Int,
+        val subtotal: Int,
+        val total: Int,
+    ) {
+        val widthChars: Int get() = qty + desc + subtotal + total
+    }
+
+    private val columns: TicketColumns
+        get() = if (is55mmPaper) {
+            TicketColumns(qty = 3, desc = 13, subtotal = 9, total = 9)
+        } else {
+            TicketColumns(qty = 5, desc = 22, subtotal = 12, total = 12)
+        }
+
+    private fun fixedCell(value: String, width: Int, alignEnd: Boolean = false): String {
+        val clean = value.replace("\n", " ").trim()
+        val truncated = if (clean.length > width) {
+            clean.take((width - 1).coerceAtLeast(1)) + "…"
+        } else {
+            clean
+        }
+        return if (alignEnd) {
+            truncated.padStart(width)
+        } else {
+            truncated.padEnd(width)
+        }
+    }
+
+    private fun tableLine(
+        qty: String,
+        desc: String,
+        subtotal: String,
+        total: String,
+        bold: Boolean = false,
+    ): TextView {
+        val c = columns
+        val line =
+            fixedCell(qty, c.qty) +
+                fixedCell(desc, c.desc) +
+                fixedCell(subtotal, c.subtotal, alignEnd = true) +
+                fixedCell(total, c.total, alignEnd = true)
+        return TextView(context).apply {
+            text = line
+            typeface = if (bold) robotoMonoBold else robotoMono
+            textSize = if (is55mmPaper) 14f else 17f
+            includeFontPadding = false
+            setPadding(2, 2, 2, 2)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+    }
+
+    private fun tableSeparatorLine(): TextView {
+        return TextView(context).apply {
+            text = "-".repeat(columns.widthChars)
+            typeface = robotoMono
+            textSize = if (is55mmPaper) 14f else 17f
+            includeFontPadding = false
+            setPadding(2, 2, 2, 2)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+    }
 
     /** Roboto Mono para tickets (monoespaciada, ideal para recibos). Fallback a MONOSPACE si falla la carga. */
     private val robotoMono: Typeface by lazy {
@@ -116,49 +185,88 @@ class PrintService(private val context: Context) {
     private val printHandler = Handler(printThread.looper)
 
     /**
-     * Imprime un ticket no fiscal
+     * Construye el [View], mide, hace layout e imprime con [ViewPrintJob] en el hilo de impresión.
      */
-    fun printNonFiscalTicket(ticket: NonFiscalTicket, callback: (PrintTicketResponse) -> Unit) {
-        val account: Account = CloverAccount.getAccount(context)
-            ?: run {
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = "No se pudo obtener la cuenta de Clover"
-                ))
-                return
+    /**
+     * Libera bitmaps asignados a [ImageView] (p. ej. QR fiscal) tras el [ViewPrintJob].
+     */
+    private fun recycleImageViewBitmaps(root: View) {
+        when (root) {
+            is ImageView -> {
+                val bmp = (root.drawable as? BitmapDrawable)?.bitmap
+                root.setImageDrawable(null)
+                if (bmp != null && !bmp.isRecycled) {
+                    bmp.recycle()
+                }
             }
+            is ViewGroup -> {
+                for (i in 0 until root.childCount) {
+                    recycleImageViewBitmaps(root.getChildAt(i))
+                }
+            }
+        }
+    }
 
-        // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
+    private fun printView(
+        account: Account,
+        buildView: () -> View,
+        successMessage: String,
+        logMessage: String,
+        callback: (PrintTicketResponse) -> Unit,
+    ) {
         printHandler.post {
+            var rootView: View? = null
             try {
                 val printerWidth = printerWidthPx
-                val view = createNonFiscalTicketView(ticket, printerWidth)
-
-                // Medir y layout el View antes de pasarlo a ViewPrintJob
+                val view = buildView()
+                rootView = view
                 val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
                 val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
                 view.measure(widthSpec, heightSpec)
                 view.layout(0, 0, view.measuredWidth, view.measuredHeight)
 
-                val printJob = ViewPrintJob.Builder()
+                ViewPrintJob.Builder()
                     .view(view, printerWidth)
                     .build()
+                    .print(context, account)
 
-                printJob.print(context, account)
-
-                Log.d(TAG, "Ticket no fiscal enviado a impresión: ${ticket.orderNumber}")
-                callback(PrintTicketResponse(
-                    success = true,
-                    message = "Ticket impreso correctamente"
-                ))
+                Log.d(TAG, logMessage)
+                callback(PrintTicketResponse(success = true, message = successMessage))
             } catch (e: Exception) {
-                Log.e(TAG, "Error al imprimir ticket no fiscal", e)
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = e.message ?: "Error desconocido al imprimir"
-                ))
+                Log.e(TAG, "Error al imprimir", e)
+                callback(
+                    PrintTicketResponse(
+                        success = false,
+                        error = e.message ?: "Error desconocido al imprimir",
+                    ),
+                )
+            } finally {
+                rootView?.let { recycleImageViewBitmaps(it) }
             }
         }
+    }
+
+    /**
+     * Imprime un ticket no fiscal
+     */
+    fun printNonFiscalTicket(ticket: NonFiscalTicket, callback: (PrintTicketResponse) -> Unit) {
+        val account = CloverAccount.getAccount(context)
+            ?: run {
+                callback(
+                    PrintTicketResponse(
+                        success = false,
+                        error = "No se pudo obtener la cuenta de Clover",
+                    ),
+                )
+                return
+            }
+        printView(
+            account = account,
+            buildView = { createNonFiscalTicketView(ticket, printerWidthPx) },
+            successMessage = "Ticket impreso correctamente",
+            logMessage = "Ticket no fiscal enviado a impresión: ${ticket.orderNumber}",
+            callback = callback,
+        )
     }
 
     /**
@@ -166,90 +274,46 @@ class PrintService(private val context: Context) {
      * Recibe el mismo modelo de datos que el ticket no fiscal.
      */
     fun printCashTicket(ticket: NonFiscalTicket, callback: (PrintTicketResponse) -> Unit) {
-        val account: Account = CloverAccount.getAccount(context)
+        val account = CloverAccount.getAccount(context)
             ?: run {
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = "No se pudo obtener la cuenta de Clover"
-                ))
+                callback(
+                    PrintTicketResponse(
+                        success = false,
+                        error = "No se pudo obtener la cuenta de Clover",
+                    ),
+                )
                 return
             }
-
-        printHandler.post {
-            try {
-                val printerWidth = printerWidthPx
-                val view = createCashTicketView(ticket, printerWidth)
-
-                val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
-                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                view.measure(widthSpec, heightSpec)
-                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-
-                val printJob = ViewPrintJob.Builder()
-                    .view(view, printerWidth)
-                    .build()
-
-                printJob.print(context, account)
-
-                Log.d(TAG, "Cash ticket enviado a impresión: ${ticket.orderNumber}")
-                callback(PrintTicketResponse(
-                    success = true,
-                    message = "Cash ticket impreso correctamente"
-                ))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error al imprimir cash ticket", e)
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = e.message ?: "Error desconocido al imprimir"
-                ))
-            }
-        }
+        printView(
+            account = account,
+            buildView = { createCashTicketView(ticket, printerWidthPx) },
+            successMessage = "Cash ticket impreso correctamente",
+            logMessage = "Cash ticket enviado a impresión: ${ticket.orderNumber}",
+            callback = callback,
+        )
     }
 
     /**
      * Imprime un ticket fiscal
      */
     fun printFiscalTicket(ticket: FiscalTicket, callback: (PrintTicketResponse) -> Unit) {
-        val account: Account = CloverAccount.getAccount(context)
+        val account = CloverAccount.getAccount(context)
             ?: run {
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = "No se pudo obtener la cuenta de Clover"
-                ))
+                callback(
+                    PrintTicketResponse(
+                        success = false,
+                        error = "No se pudo obtener la cuenta de Clover",
+                    ),
+                )
                 return
             }
-
-        // Ejecutar la creación del ViewPrintJob y la impresión en un hilo de fondo
-        printHandler.post {
-            try {
-                val printerWidth = printerWidthPx
-                val view = createFiscalTicketView(ticket, printerWidth)
-
-                // Medir y layout el View antes de pasarlo a ViewPrintJob
-                val widthSpec = View.MeasureSpec.makeMeasureSpec(printerWidth, View.MeasureSpec.EXACTLY)
-                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                view.measure(widthSpec, heightSpec)
-                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-
-                val printJob = ViewPrintJob.Builder()
-                    .view(view, printerWidth)
-                    .build()
-
-                printJob.print(context, account)
-
-                Log.d(TAG, "Ticket fiscal enviado a impresión")
-                callback(PrintTicketResponse(
-                    success = true,
-                    message = "Ticket fiscal impreso correctamente"
-                ))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error al imprimir ticket fiscal", e)
-                callback(PrintTicketResponse(
-                    success = false,
-                    error = e.message ?: "Error desconocido al imprimir"
-                ))
-            }
-        }
+        printView(
+            account = account,
+            buildView = { createFiscalTicketView(ticket, printerWidthPx) },
+            successMessage = "Ticket fiscal impreso correctamente",
+            logMessage = "Ticket fiscal enviado a impresión",
+            callback = callback,
+        )
     }
 
     /**
@@ -328,71 +392,34 @@ class PrintService(private val context: Context) {
             )
         }
 
-        // Encabezado: tres líneas cortas de iguales (como en el ticket)
+        // Referencia: hr('=')
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        // Número de pedido (texto como en imagen: "NUMERO DE PEDIDO ES:")
-        layout.addView(createBoldTextView("NUMERO DE PEDIDO ES: ${ticket.orderNumber.uppercase()}"))
-        layout.addView(createEmptyLine())
+        layout.addView(createOrdenHeaderRow(ticket.orderNumber))
+        layout.addView(createSeparatorLine("-", lineCharCount))
 
-        // Preferencia (si aplica)
+        addNonFiscalMetaBlock(layout, ticket)
+
         if (ticket.isTakeAway != null) {
-            val preferencia = if (ticket.isTakeAway == true) "PARA LLEVAR" else "PARA COMER AQUI"
-            layout.addView(createBoldTextView("PREFERENCIA: $preferencia"))
-            layout.addView(createEmptyLine())
+            addTripleSpaceDashSpace(layout)
         }
 
-        // Identificador (si aplica y no es takeAway)
-        if (ticket.isTakeAway != true && ticket.identifier != null && ticket.identifier!!.isNotEmpty()) {
-            layout.addView(createBoldTextView("IDENTIFICADOR: ${ticket.identifier!!.uppercase()}"))
-            layout.addView(createEmptyLine())
-        }
+        layout.addView(createProductLines(ticket.items))
 
-        // Separador corto antes de la tabla (guiones)
-        layout.addView(createEmptyLine())
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-        layout.addView(createEmptyLine())
+        layout.addView(createSeparatorLine("-", lineCharCount))
 
-        // Tabla de productos (TableLayout con filas y columnas)
-        val table = createProductTable(ticket)
-        layout.addView(table)
+        addTotalsBlock(layout, ticket)
 
-        // Separador corto antes del total
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-
-        // Descuento (opcional)
-        if (ticket.discountCode != null && ticket.discountCode!!.isNotEmpty()) {
-            val discountText = buildDiscountLine(ticket)
-            if (discountText.isNotEmpty()) {
-                layout.addView(createBoldTextView(discountText))
-                layout.addView(createEmptyLine())
-            }
-        } else if (ticket.discountPercent != null || ticket.discountAmount != null) {
-            val discountText = buildDiscountLine(ticket)
-            if (discountText.isNotEmpty()) {
-                layout.addView(createBoldTextView(discountText))
-                layout.addView(createEmptyLine())
-            }
-        }
-
-        // Total pegado a la derecha (TOTAL y $ a la derecha)
-        layout.addView(createTotalLineView(ticket.total))
-        layout.addView(createEmptyLine())
-
-        // Separador largo de iguales (ancho completo)
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
         layout.addView(createEmptyLine())
 
-        // Fecha y hora centrada con guiones: "--- 11/02/2026 13:00:41 ---"
-        layout.addView(createCenteredTextView("--- ${ticket.dateTime} ---"))
+        layout.addView(createCenteredTextView("----- ${ticket.dateTime} -----"))
         layout.addView(createEmptyLine())
 
-        // Disclaimer: asteriscos cortos (~14), luego texto (como en imagen)
         layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
         layout.addView(createCenteredBoldTextView("COMPROBANTE NO FISCAL,"))
         layout.addView(createCenteredBoldTextView("NO VALIDO COMO FACTURA."))
         layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
 
-        // Espacio final
         layout.addView(createEmptyLine())
         layout.addView(createEmptyLine())
 
@@ -411,16 +438,11 @@ class PrintService(private val context: Context) {
             )
         }
 
+        // Referencia `printOrder`: =, ORDEN fila, hr, callout, =, meta sin detalle, hr, totales, =, fecha, disclaimer
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        if (is55mmPaper) {
-            layout.addView(createCenteredBoldTextView("TU NUMERO DE PEDIDO"))
-            layout.addView(createCenteredBoldLargeTextView(ticket.orderNumber.uppercase()))
-        } else {
-            layout.addView(createOrderNumberCashLine(ticket.orderNumber))
-        }
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-        layout.addView(createEmptyLine())
+        layout.addView(createOrdenHeaderRow(ticket.orderNumber))
+        layout.addView(createSeparatorLine("-", lineCharCount))
+
         if (is55mmPaper) {
             layout.addView(createCenteredBoldTextView("POR FAVOR ABONAR"))
             layout.addView(createCenteredBoldTextView("EN CAJA"))
@@ -428,21 +450,21 @@ class PrintService(private val context: Context) {
             layout.addView(createCenteredBoldLargeTextView("POR FAVOR ABONAR EN CAJA"))
         }
         layout.addView(createEmptyLine())
+
+        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
+
+        addNonFiscalMetaBlock(layout, ticket)
+
+        layout.addView(createSeparatorLine("-", lineCharCount))
+
+        addTotalsBlock(layout, ticket)
+
         layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
         layout.addView(createEmptyLine())
 
-        if (ticket.isTakeAway != null) {
-            val preferencia = if (ticket.isTakeAway == true) "PARA LLEVAR" else "PARA COMER AQUI"
-            layout.addView(createBoldTextView("PREFERENCIA: $preferencia"))
-            layout.addView(createEmptyLine())
-        }
-
-        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-        layout.addView(createTotalLineView(ticket.total))
-        layout.addView(createSeparatorLine("=", TOP_EQ_LENGTH))
-        layout.addView(createEmptyLine())
         layout.addView(createCenteredTextView("----- ${ticket.dateTime} -----"))
         layout.addView(createEmptyLine())
+
         layout.addView(createCenteredBoldTextView("*".repeat(ASTERISK_LENGTH)))
         layout.addView(createCenteredBoldTextView("COMPROBANTE NO FISCAL,"))
         layout.addView(createCenteredBoldTextView("NO VALIDO COMO FACTURA."))
@@ -454,188 +476,59 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Crea la tabla de productos (filas/columnas) para el ticket no fiscal.
+     * Líneas de productos como [TextView] monoespaciados (sin [TableLayout]).
      */
-    private fun createProductTable(ticket: NonFiscalTicket): TableLayout {
-        val table = TableLayout(context).apply {
+    private fun createProductLines(items: List<TicketItem>): LinearLayout {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             )
             setPadding(0, 0, 0, 4)
-            isStretchAllColumns = false
 
-            // Solo la descripción puede "respirar"
-            setColumnStretchable(1, true)
+            addView(tableLine("Cant.", "Descripcion", "SubTot.", "Total", bold = true))
+            addView(tableSeparatorLine())
 
-            // Las de precios NO se estiran
-            setColumnStretchable(2, false)
-            setColumnStretchable(3, false)
+            items.forEach { item ->
+                if (item.quantity <= 0) return@forEach
 
-            // Si hace falta achicar, que achique descripción antes que precios
-            setColumnShrinkable(1, true)
-            setColumnShrinkable(2, false)
-            setColumnShrinkable(3, false)
-        }
+                val productName = item.description.trim()
+                addView(
+                    tableLine(
+                        qty = item.quantity.toString(),
+                        desc = productName,
+                        subtotal = formatCurrency(item.subtotal),
+                        total = formatCurrency(item.total),
+                        bold = true,
+                    ),
+                )
 
-        // Fila de encabezado: CANT. | DESCRIPCION | SUBTOT. | TOTAL
-        table.addView(createTableHeaderRow())
-        // Separador dentro de la tabla (fila con guiones)
-        table.addView(createTableSeparatorView())
-
-        // Filas de items y subselecciones
-        ticket.items.forEach { item ->
-            if (item.quantity <= 0) return@forEach
-
-            // Fila del producto
-            table.addView(createProductRow(item))
-
-            // Filas de subselecciones (indentadas)
-            if (!item.subselections.isNullOrEmpty()) {
-                item.subselections.forEach { sub ->
-                    table.addView(createSubselectionRow(sub))
+                if (!item.subselections.isNullOrEmpty()) {
+                    item.subselections.forEach { sub ->
+                        val subName = sub.name.trim()
+                        val subLabel = "$subName x ${sub.quantity}"
+                        addView(
+                            tableLine(
+                                qty = "",
+                                desc = " $subLabel",
+                                subtotal = formatCurrency(sub.price),
+                                total = formatCurrency(sub.total),
+                                bold = false,
+                            ),
+                        )
+                    }
+                    addView(createEmptyLine())
                 }
-            }
 
-            // Comentario del item (fila que abarca todas las columnas o solo descripción)
-            if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
-                table.addView(createNoteRow(item.comment!!.trim()))
-            }
-        }
+                item.comment?.trim()?.takeIf { it.isNotEmpty() }?.let { note ->
+                    addView(createMetaBoldLine("NOTA: $note"))
+                }
 
-        return table
-    }
-
-    /**
-     * Crea la tabla de productos para el ticket fiscal (misma estructura de filas/columnas).
-     */
-    private fun createFiscalProductTable(ticket: FiscalTicket): TableLayout {
-        val table = TableLayout(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            setPadding(0, 4, 0, 4)
-            setColumnStretchable(1, true)
-        }
-        table.addView(createTableHeaderRow())
-        table.addView(createTableSeparatorView())
-        ticket.items.forEach { item ->
-            if (item.quantity <= 0) return@forEach
-            table.addView(createProductRow(item))
-            if (!item.subselections.isNullOrEmpty()) {
-                item.subselections.forEach { sub -> table.addView(createSubselectionRow(sub)) }
-            }
-            if (!item.comment.isNullOrEmpty() && item.comment!!.trim().isNotEmpty()) {
-                table.addView(createNoteRow(item.comment!!.trim()))
-            }
-        }
-        return table
-    }
-
-    /** Fila de encabezado de la tabla. */
-    private fun createTableHeaderRow(): TableRow {
-        return TableRow(context).apply {
-            addView(createTableCell("CANT.", Gravity.START, true, COL_WEIGHT_CANT, singleLine = true))
-            addView(createTableCell("DESCRIPCION", Gravity.START, true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell("SUBTOT.", Gravity.START, true, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell("TOTAL", Gravity.START, true, COL_WEIGHT_TOTAL, singleLine = true))
-        }
-    }
-
-
-    /** Fila separadora (guiones). */
-    private fun createTableSeparatorView(): TextView {
-        return TextView(context).apply {
-            text = "-".repeat(lineCharCount) // o SHORT_SEP_LENGTH si querés
-            typeface = robotoMono
-            textSize = if (is55mmPaper) 13f else 16f
-            includeFontPadding = false
-            setPadding(2, 2, 2, 2)
-            layoutParams = TableLayout.LayoutParams(
-                TableLayout.LayoutParams.MATCH_PARENT,
-                TableLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-    }
-
-
-
-    /** Fila de un producto. */
-    private fun createProductRow(item: TicketItem): TableRow {
-        val desc = item.description.uppercase()
-
-        return TableRow(context).apply {
-            addView(createTableCell(item.quantity.toString(), Gravity.START, bold = true, COL_WEIGHT_CANT, singleLine = true))
-            addView(createTableCell(desc, Gravity.START, bold = true, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell(formatCurrency(item.subtotal), Gravity.START, bold = true, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell(formatCurrency(item.total), Gravity.START, bold = true, COL_WEIGHT_TOTAL, singleLine = true))
-        }
-    }
-
-    /** Fila de una subselección (primera celda vacía para indentar). */
-    private fun createSubselectionRow(sub: TicketSubselection): TableRow {
-        val text = "${sub.name.uppercase()} x ${sub.quantity}"
-
-        return TableRow(context).apply {
-            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT, singleLine = true))
-            addView(createTableCell(text, Gravity.START, bold = false, COL_WEIGHT_DESC, singleLine = true, ellipsizeEnd = true))
-            addView(createTableCell(formatCurrency(sub.price), Gravity.END, bold = false, COL_WEIGHT_SUBTOT, singleLine = true))
-            addView(createTableCell(formatCurrency(sub.total), Gravity.END, bold = false, COL_WEIGHT_TOTAL, singleLine = true))
-        }
-    }
-
-
-    /** Fila de nota/comentario del item. */
-    private fun createNoteRow(note: String): TableRow {
-        val noteText = "NOTA: ${note.uppercase()}"
-        return TableRow(context).apply {
-            addView(createTableCell("", Gravity.START, bold = false, COL_WEIGHT_CANT))
-            addView(createTableCell(noteText, Gravity.START, bold = true, COL_WEIGHT_DESC))
-            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_SUBTOT))
-            addView(createTableCell("", Gravity.END, bold = false, COL_WEIGHT_TOTAL))
-        }
-    }
-
-    /**
-     * Crea una celda de tabla (TextView con alineación y peso de columna).
-     * [singleLine] = true evita que el $ y el precio se separen en líneas (para celdas de moneda).
-     */
-    private fun createTableCell(
-        text: String,
-        gravity: Int,
-        bold: Boolean,
-        weight: Float = 1f,
-        singleLine: Boolean = false,
-        ellipsizeEnd: Boolean = false,
-    ): TextView {
-        val lp = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, weight).apply {
-            marginEnd = 2
-        }
-
-        return TextView(context).apply {
-            this.text = text
-            this.gravity = gravity
-            typeface = if (bold) robotoMonoBold else robotoMono
-            textSize = if (is55mmPaper) 14f else 17f
-            includeFontPadding = false
-            layoutParams = lp
-            setPadding(2, 2, 2, 2)
-
-            // Importante para tickets: que no refluya raro
-            isSingleLine = singleLine
-            maxLines = if (singleLine) 1 else 2
-
-            if (singleLine) {
-                setHorizontallyScrolling(true)
-            }
-
-            if (ellipsizeEnd) {
-                ellipsize = android.text.TextUtils.TruncateAt.END
+                addView(createSeparatorLine(" ", lineCharCount))
             }
         }
     }
-
 
     /**
      * Crea un View para el ticket fiscal
@@ -655,7 +548,7 @@ class PrintService(private val context: Context) {
         val tipoComprobante = ticket.tipoComprobante ?: "RECIBO C"
         layout.addView(createCenteredBoldLargeTextView(tipoComprobante.uppercase()))
         layout.addView(createCenteredTextView("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}"))
-        layout.addView(createSeparatorLine("=", null, width))
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
         // Información del vendedor
         layout.addView(createTextView("RAZON SOCIAL: ${fiscalInfo.razonSocial.uppercase()}"))
@@ -676,9 +569,7 @@ class PrintService(private val context: Context) {
         }
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
 
-        // Tabla de productos (misma estructura que ticket no fiscal)
-        val fiscalTable = createFiscalProductTable(ticket)
-        layout.addView(fiscalTable)
+        layout.addView(createProductLines(ticket.items))
 
         // Separador
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
@@ -719,27 +610,22 @@ class PrintService(private val context: Context) {
         }
 
         // Separador antes del QR
-        layout.addView(createSeparatorLine("=", null, width))
+        layout.addView(createSeparatorLine("-", null, width))
         layout.addView(createEmptyLine())
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
         if (fiscalInfo.qrCodeData != null) {
-            layout.addView(createCenteredTextView("[QR CODE]"))
-            layout.addView(createEmptyLine())
+            fiscalInfo.qrCodeData
+                ?.takeIf { it.isNotBlank() }
+                ?.let { qrData ->
+                    layout.addView(createQrImageView(qrData, size = 260))
+                    layout.addView(createEmptyLine())
+                }
         }
 
         // Separador después del QR
         layout.addView(createEmptyLine())
         layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
-        layout.addView(createEmptyLine())
-
-        // Footer
-        layout.addView(createCenteredTextView("Comprobable Autorizado"))
-        layout.addView(createCenteredBoldTextView("Esta Administracion Federal no se responsabiliza por los datos"))
-        layout.addView(createCenteredBoldTextView("ingresados en el detalle de la operacion"))
-
-        // Espacio final
-        layout.addView(createEmptyLine())
         layout.addView(createEmptyLine())
 
         return layout
@@ -753,11 +639,47 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMono
             textSize = if (is55mmPaper) 20f else 27f
+            includeFontPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
+            }
+        }
+    }
+
+    private fun createQrBitmap(data: String, size: Int): Bitmap {
+        val hints = mapOf(
+            EncodeHintType.MARGIN to 2,
+            EncodeHintType.CHARACTER_SET to "UTF-8",
+        )
+        val matrix = QRCodeWriter().encode(
+            data,
+            BarcodeFormat.QR_CODE,
+            size,
+            size,
+            hints,
+        )
+        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+            for (x in 0 until size) {
+                for (y in 0 until size) {
+                    setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)
+                }
+            }
+        }
+    }
+
+    private fun createQrImageView(data: String, size: Int = 260): ImageView {
+        val bitmap = createQrBitmap(data, size)
+        return ImageView(context).apply {
+            setImageBitmap(bitmap)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = 8
+                bottomMargin = 8
             }
         }
     }
@@ -770,6 +692,7 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 20f else 27f
+            includeFontPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -787,6 +710,7 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 27f
+            includeFontPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -804,7 +728,7 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMono
             textSize = if (is55mmPaper) 20f else 27f
-
+            includeFontPadding = false
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -823,6 +747,7 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 19f else 24f
+            includeFontPadding = false
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -841,6 +766,7 @@ class PrintService(private val context: Context) {
             this.text = text.uppercase()
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 27f
+            includeFontPadding = false
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -865,6 +791,7 @@ class PrintService(private val context: Context) {
             text = line
             typeface = robotoMono
             textSize = if (is55mmPaper) 20f else 27f
+            includeFontPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -890,179 +817,6 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Construye las líneas del ticket fiscal
-     */
-    private fun buildFiscalTicketLines(ticket: FiscalTicket): List<String> {
-        val lines = mutableListOf<String>()
-
-        val fiscalInfo = ticket.fiscalInfo
-
-        // Encabezado con tipo de comprobante
-        val tipoComprobante = ticket.tipoComprobante ?: "Recibo C"
-        lines.add(centerText(tipoComprobante))
-        lines.add("ORIGINAL Cod.: ${fiscalInfo.numeroT.takeIf { it.length <= 2 } ?: "15"}")
-        lines.add("=".repeat(lineCharCount))
-
-        // Información del vendedor
-        lines.add("RAZON SOCIAL: ${fiscalInfo.razonSocial}")
-        lines.add("CUIT: ${fiscalInfo.cuit}")
-        lines.add("DIRECCION: ${fiscalInfo.direccion}")
-        lines.add("LOCALIDAD: ${fiscalInfo.localidad}")
-        lines.add("Nro de insc. IIBB: ${fiscalInfo.numeroInscripcionIIBB}")
-        lines.add(fiscalInfo.responsable)
-        lines.add("Inicio Actividades: ${fiscalInfo.inicioActividades}")
-        lines.add("-".repeat(lineCharCount))
-
-        // Detalles de la transacción
-        lines.add("FECHA: ${fiscalInfo.fecha}")
-        lines.add("Nro T: ${fiscalInfo.numeroT}")
-        lines.add("Pto. Vta.:${fiscalInfo.puntoVenta}")
-        if (fiscalInfo.consumidorFinal) {
-            lines.add("CONSUMIDOR FINAL")
-        }
-        lines.add("-".repeat(lineCharCount))
-
-        // Encabezado de la tabla
-        lines.add(buildTableHeader())
-        lines.add("-".repeat(lineCharCount))
-
-        // Items con subselecciones
-        ticket.items.forEach { item ->
-            if (item.quantity > 0) {
-                lines.add(buildItemLine(item))
-
-                // Subselecciones
-                if (!item.subselections.isNullOrEmpty()) {
-                    item.subselections.forEach { subselection ->
-                        lines.add(buildSubselectionLine(subselection, item.quantity))
-                    }
-                    lines.add("")
-                }
-
-                lines.add(" ")
-            }
-        }
-
-        // Separador
-        lines.add("-".repeat(lineCharCount))
-
-        // Total
-        lines.add(buildTotalLine(ticket.total))
-        lines.add("-".repeat(lineCharCount))
-
-        // Información fiscal
-        if (fiscalInfo.regimenFiscal != null) {
-            lines.add(fiscalInfo.regimenFiscal)
-        }
-        if (fiscalInfo.ivaContenido != null) {
-            lines.add("IVA contenido: ${formatCurrency(fiscalInfo.ivaContenido)}")
-        }
-        if (fiscalInfo.otrosImpuestosNacionales != null) {
-            lines.add("Otro imp. Nacionales Indirectos: ${formatCurrency(fiscalInfo.otrosImpuestosNacionales)}")
-        }
-
-        // CAE y fecha de vencimiento en la misma línea
-        if (fiscalInfo.cae != null || fiscalInfo.fechaVencimiento != null) {
-            lines.add(" ")
-            val caeText = if (fiscalInfo.cae != null) "CAE:${fiscalInfo.cae}" else ""
-            val fechaText = if (fiscalInfo.fechaVencimiento != null) "Fech Vto.: ${fiscalInfo.fechaVencimiento}" else ""
-            if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
-                // Intentar ponerlos en la misma línea si caben
-                val combined = "$caeText $fechaText"
-                if (combined.length <= lineCharCount) {
-                    lines.add(combined)
-                } else {
-                    lines.add(caeText)
-                    lines.add(fechaText)
-                }
-            } else {
-                if (caeText.isNotEmpty()) lines.add(caeText)
-                if (fechaText.isNotEmpty()) lines.add(fechaText)
-            }
-            lines.add(" ")
-        }
-
-        // Separador antes del QR
-        lines.add("=".repeat(lineCharCount))
-        lines.add("")
-
-        // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)
-        if (fiscalInfo.qrCodeData != null) {
-            lines.add("[QR CODE]")
-            lines.add("")
-        }
-
-        // Separador después del QR
-        lines.add(" ")
-        lines.add("-".repeat(lineCharCount))
-        lines.add("")
-
-        // Footer
-        lines.add(centerText("Comprobable Autorizado"))
-        lines.add(centerText("Esta Administracion Federal no se responsabiliza por los datos"))
-        lines.add(centerText("ingresados en el detalle de la operacion"))
-
-        // Espacio final
-        lines.add("")
-        lines.add("")
-
-        return lines
-    }
-
-    /**
-     * Construye el encabezado de la tabla (como en imagen: CANT. DESCRIPCION SUBTOT. TOTAL)
-     */
-    private fun buildTableHeader(): String {
-        return String.format(
-            "%-5s %-22s %10s %10s",
-            "CANT.",
-            "DESCRIPCION",
-            "SUBTOT.",
-            "TOTAL"
-        ).trim()
-    }
-
-    /**
-     * Construye una línea de item (descripción truncada con ... como en imagen)
-     */
-    private fun buildItemLine(item: TicketItem): String {
-        val maxDescLength = 22
-        val desc = if (item.description.length > maxDescLength) {
-            item.description.uppercase().substring(0, maxDescLength - 3) + "..."
-        } else {
-            item.description.uppercase()
-        }
-        val subtotStr = formatCurrency(item.subtotal)
-        val totalStr = formatCurrency(item.total)
-        return String.format(
-            "%-5d %-22s %10s %10s",
-            item.quantity,
-            desc,
-            subtotStr,
-            totalStr
-        ).trim()
-    }
-
-    /**
-     * Construye una línea de subselección (indentada, mayúsculas)
-     */
-    private fun buildSubselectionLine(subselection: TicketSubselection, parentQuantity: Int): String {
-        val maxDescLength = 22
-        val desc = if (subselection.name.length > maxDescLength) {
-            subselection.name.uppercase().substring(0, maxDescLength - 3) + "..."
-        } else {
-            subselection.name.uppercase()
-        }
-        val subDesc = "$desc x ${subselection.quantity}"
-        return String.format(
-            "     %-22s %10s %10s",
-            subDesc,
-            formatCurrency(subselection.price),
-            formatCurrency(subselection.total)
-        ).trim()
-    }
-
-    /**
      * Vista de la línea del total: "TOTAL:" pegado a la izquierda, monto pegado a la derecha.
      */
     private fun createTotalLineView(total: Double): View {
@@ -1081,6 +835,7 @@ class PrintService(private val context: Context) {
             text = "TOTAL:"
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1092,6 +847,7 @@ class PrintService(private val context: Context) {
             text = totalText
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
             gravity = Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -1103,9 +859,9 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Fila del ticket de caja: texto a la izquierda y número de pedido a la derecha.
+     * Fila `ORDEN:` + número (referencia PosColumn 6+6).
      */
-    private fun createOrderNumberCashLine(orderNumber: String): View {
+    private fun createOrdenHeaderRow(orderNumber: String): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -1117,9 +873,10 @@ class PrintService(private val context: Context) {
         }
 
         row.addView(TextView(context).apply {
-            text = "TU NUMERO DE PEDIDO ES"
+            text = "ORDEN:"
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -1129,9 +886,10 @@ class PrintService(private val context: Context) {
         })
 
         row.addView(TextView(context).apply {
-            text = orderNumber.uppercase()
+            text = orderNumber.trim()
             typeface = robotoMonoBold
             textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
             gravity = Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1143,42 +901,122 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Construye la línea del total como string (para impresión por texto).
+     * Suma de totales por ítem (líneas con cantidad > 0).
      */
-    private fun buildTotalLine(total: Double): String {
-        val totalText = formatCurrency(total)
-        return "TOTAL:  $totalText"
+    private fun sumLineTotals(items: List<TicketItem>): Double =
+        items.asSequence().filter { it.quantity > 0 }.sumOf { it.total }
+
+    private fun hasOrderDiscount(ticket: NonFiscalTicket): Boolean {
+        val code = ticket.discountCode?.trim()?.isNotEmpty() == true
+        return code || ticket.discountPercent != null || ticket.discountAmount != null
+    }
+
+    /** Misma regla que el ticket ESC/POS: identificador si no es para llevar o si no hay preferencia definida. */
+    private fun shouldShowIdentifier(ticket: NonFiscalTicket): Boolean {
+        if (ticket.identifier?.trim()?.isNotEmpty() != true) return false
+        return ticket.isTakeAway != true
     }
 
     /**
-     * Construye la línea de descuento
+     * Texto de descuento alineado al ticket de referencia (`Descuento: …`).
      */
     private fun buildDiscountLine(ticket: NonFiscalTicket): String {
-        val code = ticket.discountCode?.takeIf { it.isNotEmpty() }?.uppercase() ?: ""
+        val code = ticket.discountCode?.trim()?.takeIf { it.isNotEmpty() }
         val percent = ticket.discountPercent
         val amount = ticket.discountAmount
         return when {
-            code.isNotEmpty() && percent != null -> "DESCUENTO: $code ${percent.toInt()}%"
-            code.isNotEmpty() && amount != null -> "DESCUENTO: $code ${formatCurrency(amount)}"
-            code.isNotEmpty() -> "DESCUENTO: $code"
-            percent != null -> "DESCUENTO: ${percent.toInt()}%"
-            amount != null -> "DESCUENTO: ${formatCurrency(amount)}"
+            code != null && percent != null -> "Descuento: $code ${percent.toInt()}%"
+            code != null && amount != null -> "Descuento: $code ${formatCurrency(amount)}"
+            code != null -> "Descuento: $code"
+            percent != null -> "Descuento: ${percent.toInt()}%"
+            amount != null -> "Descuento: ${formatCurrency(amount)}"
             else -> ""
         }
     }
 
-
-    /**
-     * Centra un texto en la línea
-     */
-    private fun centerText(text: String): String {
-        // Si el texto es más largo que el ancho de línea, simplemente retornarlo sin centrar
-        if (text.length >= lineCharCount) {
-            return text
+    /** Meta superior (preferencia, identificador, descuento) — mismo orden que `_nonFiscalTicketMetaItemsAndTotals`. */
+    private fun addNonFiscalMetaBlock(layout: LinearLayout, ticket: NonFiscalTicket) {
+        if (ticket.isTakeAway != null) {
+            val pref = if (ticket.isTakeAway == true) "Para llevar" else "Para comer aquí"
+            layout.addView(createMetaBoldLine("Preferencia: $pref"))
         }
-        val padding = (lineCharCount - text.length) / 2
-        // Asegurarse de que padding nunca sea negativo
-        val safePadding = maxOf(0, padding)
-        return " ".repeat(safePadding) + text
+        if (shouldShowIdentifier(ticket)) {
+            layout.addView(createMetaBoldLine("Identificador: ${ticket.identifier!!.trim()}"))
+        }
+        if (hasOrderDiscount(ticket)) {
+            val line = buildDiscountLine(ticket)
+            if (line.isNotEmpty()) {
+                layout.addView(createMetaBoldLine(line))
+            }
+        }
+    }
+
+    private fun createMetaBoldLine(text: String): TextView {
+        return TextView(context).apply {
+            this.text = text
+            typeface = robotoMonoBold
+            textSize = if (is55mmPaper) 20f else 27f
+            includeFontPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                setMargins(0, if (is55mmPaper) 2 else 4, 0, if (is55mmPaper) 2 else 4)
+            }
+        }
+    }
+
+    /** `hr(ch: ' ')`, `hr()`, `hr(ch: ' ')` antes del detalle cuando hay preferencia (referencia POS). */
+    private fun addTripleSpaceDashSpace(layout: LinearLayout) {
+        layout.addView(createSeparatorLine(" ", lineCharCount))
+        layout.addView(createSeparatorLine("-", lineCharCount))
+        layout.addView(createSeparatorLine(" ", lineCharCount))
+    }
+
+    private fun createLabelValueTotalRow(label: String, value: String): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                setMargins(0, if (is55mmPaper) 3 else 6, 0, if (is55mmPaper) 3 else 6)
+            }
+        }
+        row.addView(TextView(context).apply {
+            text = label
+            typeface = robotoMonoBold
+            textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
+            gravity = Gravity.START
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                0.55f,
+            )
+        })
+        row.addView(TextView(context).apply {
+            text = value
+            typeface = robotoMonoBold
+            textSize = if (is55mmPaper) 22f else 30f
+            includeFontPadding = false
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                0.45f,
+            )
+        })
+        return row
+    }
+
+    private fun addTotalsBlock(layout: LinearLayout, ticket: NonFiscalTicket) {
+        if (hasOrderDiscount(ticket)) {
+            val sub = sumLineTotals(ticket.items)
+            layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(sub)))
+            layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(ticket.total)))
+        } else {
+            layout.addView(createLabelValueTotalRow("Total:", formatCurrency(ticket.total)))
+        }
     }
 }

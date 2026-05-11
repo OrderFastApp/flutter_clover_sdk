@@ -47,7 +47,7 @@ class PrintService(private val context: Context) {
         private const val LINE_CHAR_80MM = 22
         private const val LINE_CHAR_55MM = 14
         /** Separadores cortos como en el ticket (líneas de guiones o iguales). */
-        private const val SHORT_SEP_LENGTH = 20
+        private const val SHORT_SEP_LENGTH = 25
         /** Línea de iguales corta en el encabezado (varias líneas de ~6 caracteres). */
         private const val TOP_EQ_LENGTH = 20
         /** Asteriscos que enmarcan el disclaimer. */
@@ -594,23 +594,14 @@ class PrintService(private val context: Context) {
             layout.addView(createEmptyLine())
             val caeText = if (fiscalInfo.cae != null) "CAE:${fiscalInfo.cae}" else ""
             val fechaText = if (fiscalInfo.fechaVencimiento != null) "Fech Vto.: ${fiscalInfo.fechaVencimiento}" else ""
-            if (caeText.isNotEmpty() && fechaText.isNotEmpty()) {
-                val combined = "$caeText $fechaText"
-                if (combined.length <= 48) {
-                    layout.addView(createTextView(combined))
-                } else {
-                    if (caeText.isNotEmpty()) layout.addView(createTextView(caeText))
-                    if (fechaText.isNotEmpty()) layout.addView(createTextView(fechaText))
-                }
-            } else {
-                if (caeText.isNotEmpty()) layout.addView(createTextView(caeText))
-                if (fechaText.isNotEmpty()) layout.addView(createTextView(fechaText))
-            }
+            if (caeText.isNotEmpty()) layout.addView(createTextView(caeText))
+            if (fechaText.isNotEmpty()) layout.addView(createTextView(fechaText))
             layout.addView(createEmptyLine())
         }
 
         // Separador antes del QR
-        layout.addView(createSeparatorLine("-", null, width))
+
+        layout.addView(createSeparatorLine("-", SHORT_SEP_LENGTH))
         layout.addView(createEmptyLine())
 
         // QR Code (nota: el QR code real se imprimiría como imagen, aquí solo indicamos)

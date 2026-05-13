@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.util.Base64
 import android.util.Log
 import android.graphics.drawable.BitmapDrawable
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -151,16 +152,29 @@ class PrintService(private val context: Context) {
         Typeface.create(robotoMono, Typeface.BOLD)
     }
 
-    /** Formato argentino: $ 4.900,00 (espacio después de $, punto miles, coma decimal). */
-    private val numberFormat: NumberFormat by lazy {
-        val symbols = DecimalFormatSymbols(Locale("es", "AR")).apply {
+    /** Símbolos numéricos argentinos: punto para miles, coma decimal. */
+    private val argSymbols: DecimalFormatSymbols by lazy {
+        DecimalFormatSymbols(Locale("es", "AR")).apply {
             groupingSeparator = '.'
             decimalSeparator = ','
         }
-        DecimalFormat("#,##0.00", symbols)
     }
 
-    private fun formatCurrency(amount: Double): String = "\$ ${numberFormat.format(amount)}"
+    /** Formato argentino con dos decimales: $ 4.900,00. */
+    private val numberFormat: NumberFormat by lazy { DecimalFormat("#,##0.00", argSymbols) }
+
+    /** Formato argentino sin decimales: $ 4.900. */
+    private val integerNumberFormat: NumberFormat by lazy { DecimalFormat("#,##0", argSymbols) }
+
+    /**
+     * Moneda con espacio detrás del `$`. Si el monto no tiene centavos (ej. 6930,00) se imprime
+     * sin la parte decimal para reducir el ancho y evitar saltos de línea raros en pantalla angosta.
+     */
+    private fun formatCurrency(amount: Double): String {
+        val cents = Math.round(amount * 100.0)
+        val formatter = if (cents % 100L == 0L) integerNumberFormat else numberFormat
+        return "\$ ${formatter.format(amount)}"
+    }
 
     private fun detectPaperProfile(): PaperProfile {
         return try {
@@ -937,7 +951,13 @@ class PrintService(private val context: Context) {
         layout.addView(createSeparatorLine(" ", lineCharCount))
     }
 
-    private fun createLabelValueTotalRow(label: String, value: String): View {
+    /**
+     * Fila `etiqueta` ← → `monto`. El monto va a la derecha en `WRAP_CONTENT` (nunca se parte)
+     * y la etiqueta toma el resto del ancho con `singleLine` (se trunca con `…` si no entrara).
+     * Cuando [compact] es true se reduce el tamaño para que filas con etiquetas largas
+     * como "Total con descuento:" no rompan la línea.
+     */
+    private fun createLabelValueTotalRow(label: String, value: String, compact: Boolean = false): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -947,29 +967,39 @@ class PrintService(private val context: Context) {
                 setMargins(0, if (is55mmPaper) 3 else 6, 0, if (is55mmPaper) 3 else 6)
             }
         }
+        val textSizeSp = when {
+            compact && is55mmPaper -> 18f
+            compact -> 24f
+            is55mmPaper -> 22f
+            else -> 30f
+        }
         row.addView(TextView(context).apply {
             text = label
             typeface = robotoMonoBold
-            textSize = if (is55mmPaper) 22f else 30f
+            textSize = textSizeSp
             includeFontPadding = false
             gravity = Gravity.START
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                0.55f,
+                1f,
             )
         })
         row.addView(TextView(context).apply {
             text = value
             typeface = robotoMonoBold
-            textSize = if (is55mmPaper) 22f else 30f
+            textSize = textSizeSp
             includeFontPadding = false
             gravity = Gravity.END
+            isSingleLine = true
             layoutParams = LinearLayout.LayoutParams(
-                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                0.45f,
-            )
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                marginStart = if (is55mmPaper) 4 else 8
+            }
         })
         return row
     }
@@ -977,9 +1007,9 @@ class PrintService(private val context: Context) {
     private fun addTotalsBlock(layout: LinearLayout, ticket: NonFiscalTicket) {
         val r = NonFiscalReceiptTotals.resolve(ticket)
         if (r.showBreakdown) {
-            layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(r.subtotal)))
-            layout.addView(createLabelValueTotalRow("Descuento:", "-${formatCurrency(r.discount)}"))
-            layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(r.total)))
+            layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(r.subtotal), compact = true))
+            layout.addView(createLabelValueTotalRow("Descuento:", "-${formatCurrency(r.discount)}", compact = true))
+            layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(r.total), compact = true))
         } else {
             layout.addView(createLabelValueTotalRow("Total:", formatCurrency(r.total)))
         }

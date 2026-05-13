@@ -12,6 +12,8 @@ import ar.com.orderfast.printing.NonFiscalReceiptTotals
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.TextPrintJob
 import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -26,7 +28,12 @@ class PrintTextService(private val context: Context) {
         private const val LINE_WIDTH_55MM = 32
     }
 
-    private val numberFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
+    private val argSymbols: DecimalFormatSymbols = DecimalFormatSymbols(Locale("es", "AR")).apply {
+        groupingSeparator = '.'
+        decimalSeparator = ','
+    }
+    private val numberFormat: NumberFormat = DecimalFormat("#,##0.00", argSymbols)
+    private val integerNumberFormat: NumberFormat = DecimalFormat("#,##0", argSymbols)
     private val lineWidth: Int by lazy { resolveLineWidth() }
 
     private data class TicketTextLayout(
@@ -456,10 +463,12 @@ class PrintTextService(private val context: Context) {
     }
 
     /**
-     * Formatea un número como moneda
+     * Moneda con `$` antepuesto. Si el monto no tiene centavos se omite la parte decimal.
      */
     private fun formatCurrency(amount: Double): String {
-        return numberFormat.format(amount)
+        val cents = Math.round(amount * 100.0)
+        val formatter = if (cents % 100L == 0L) integerNumberFormat else numberFormat
+        return "\$${formatter.format(amount)}"
     }
 
     /**

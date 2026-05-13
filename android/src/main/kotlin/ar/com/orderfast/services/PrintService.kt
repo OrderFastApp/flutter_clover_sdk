@@ -1004,7 +1004,9 @@ class PrintService(private val context: Context) {
     private fun addTotalsBlock(layout: LinearLayout, ticket: NonFiscalTicket) {
         if (hasOrderDiscount(ticket)) {
             val sub = sumLineTotals(ticket.items)
+            val discount = (sub - ticket.total).coerceAtLeast(0.0)
             layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(sub)))
+            layout.addView(createLabelValueTotalRow("Descuento:", "-${formatCurrency(discount)}"))
             layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(ticket.total)))
         } else {
             layout.addView(createLabelValueTotalRow("Total:", formatCurrency(ticket.total)))

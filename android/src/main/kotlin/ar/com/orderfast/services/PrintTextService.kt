@@ -8,6 +8,7 @@ import ar.com.orderfast.models.NonFiscalTicket
 import ar.com.orderfast.models.PrintTicketResponse
 import ar.com.orderfast.models.TicketItem
 import ar.com.orderfast.models.TicketSubselection
+import ar.com.orderfast.printing.NonFiscalReceiptTotals
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.TextPrintJob
 import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
@@ -165,6 +166,14 @@ class PrintTextService(private val context: Context) {
             lines.add("")
         }
 
+        if (NonFiscalReceiptTotals.hasDiscountMeta(ticket)) {
+            val discountLine = NonFiscalReceiptTotals.buildDiscountMetaLine(ticket, ::formatCurrency)
+            if (discountLine.isNotEmpty()) {
+                lines.add(discountLine)
+                lines.add("")
+            }
+        }
+
         // Separadores antes de la tabla
         if (ticket.isTakeAway != null) {
             lines.add(" ")
@@ -201,8 +210,14 @@ class PrintTextService(private val context: Context) {
         // Separador
         lines.add("-".repeat(lineWidth))
 
-        // Total
-        lines.add(buildTotalLine(ticket.total))
+        val resolved = NonFiscalReceiptTotals.resolve(ticket)
+        if (resolved.showBreakdown) {
+            lines.add(buildLabeledMoneyLine("Subtotal:", resolved.subtotal, negativeValue = false))
+            lines.add(buildLabeledMoneyLine("Descuento:", resolved.discount, negativeValue = true))
+            lines.add(buildLabeledMoneyLine("Total con descuento:", resolved.total, negativeValue = false))
+        } else {
+            lines.add(buildTotalLine(ticket.total))
+        }
         lines.add("")
 
         // Separador
@@ -403,6 +418,23 @@ class PrintTextService(private val context: Context) {
             subDesc,
             formatCurrency(subselection.price),
             formatCurrency(subselection.total)
+        ).trim()
+    }
+
+    /**
+     * Línea etiqueta + monto (mismo padding que [buildTotalLine]).
+     */
+    private fun buildLabeledMoneyLine(label: String, amount: Double, negativeValue: Boolean): String {
+        var formatted = formatCurrency(amount)
+        if (!formatted.startsWith("$")) formatted = "\$$formatted"
+        val valueText = if (negativeValue) "-$formatted" else formatted
+        if (lineWidth <= LINE_WIDTH_55MM) {
+            return "$label $valueText"
+        }
+        return String.format(
+            "%-35s %13s",
+            label,
+            valueText,
         ).trim()
     }
 

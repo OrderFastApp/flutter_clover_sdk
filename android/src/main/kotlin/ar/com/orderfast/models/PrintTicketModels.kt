@@ -50,7 +50,10 @@ data class FiscalInfo(
 )
 
 /**
- * Ticket no fiscal
+ * Ticket no fiscal.
+ *
+ * [subtotalBeforeDiscount] y [discountAppliedAmount]: montos del pie del recibo (enviar ya calculados desde la app).
+ * [discountCode], [discountPercent], [discountAmount]: solo texto informativo del descuento en el encabezado.
  */
 data class NonFiscalTicket(
     val orderNumber: String,
@@ -62,7 +65,9 @@ data class NonFiscalTicket(
     val disclaimer: String? = "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA.",
     val discountCode: String? = null,
     val discountPercent: Double? = null,
-    val discountAmount: Double? = null
+    val discountAmount: Double? = null,
+    val subtotalBeforeDiscount: Double? = null,
+    val discountAppliedAmount: Double? = null,
 )
 
 /**

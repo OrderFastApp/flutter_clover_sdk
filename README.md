@@ -17,6 +17,7 @@ Plugin de Flutter para integrar el SDK de Clover en aplicaciones Android, permit
 - [Ejemplo Completo](#-ejemplo-completo)
 - [API](#-api)
 - [Callbacks](#-callbacks)
+- [Impresión de tickets (no fiscal / caja)](#-impresión-de-tickets-no-fiscal--caja)
 - [Troubleshooting](#-troubleshooting)
 
 ## ✨ Características
@@ -596,6 +597,23 @@ Presenta un código QR para que el cliente escanee y realice el pago.
 - La respuesta real del pago llegará en el callback `onQrPaymentResponse`
 - No requiere que el dispositivo esté conectado (a diferencia de los pagos con tarjeta)
 - El QR se genera automáticamente por el sistema Clover
+
+## 📄 Impresión de tickets (no fiscal / caja)
+
+Los métodos `printTicket`, `printTextTicket` y `printCashTicket` envían un mapa `nonFiscalTicket` por el `MethodChannel('clover_sdk')`.
+
+**Montos del pie (recomendado enviarlos ya calculados desde tu app)**
+
+- `subtotalBeforeDiscount` (opcional, `double`): subtotal antes del descuento para las líneas **Subtotal:** / **Descuento:** / **Total con descuento:**. Imprescindible si imprimís ticket de caja con `items: []` y querés el desglose correcto.
+- `discountAppliedAmount` (opcional, `double`): monto del descuento aplicado como **número positivo**; en el ticket se imprime con signo negativo.
+
+Si mandás **los dos**, Android usa exactamente esos valores y `total` como total final, sin recalcular.
+
+**Texto informativo del descuento (encabezado)**
+
+- `discountCode`, `discountPercent`, `discountAmount`: solo arman la línea descriptiva tipo "Descuento: …" arriba del detalle; **no** reemplazan a `subtotalBeforeDiscount` / `discountAppliedAmount` en el pie.
+
+**Compatibilidad:** si no enviás los campos del pie pero hay ítems con importe y metadatos de descuento, el plugin puede desglosar usando la suma de totales por línea como subtotal. `printOrderTicket` / `orderToNonFiscalTicket` rellenan `subtotalBeforeDiscount` y `discountAppliedAmount` cuando la suma de ítems supera al `total` de la orden.
 
 ## 🔔 Callbacks
 

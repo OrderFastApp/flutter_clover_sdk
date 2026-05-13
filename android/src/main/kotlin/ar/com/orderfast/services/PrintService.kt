@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import ar.com.orderfast.printing.NonFiscalReceiptTotals
 import ar.com.orderfast.models.FiscalTicket
 import ar.com.orderfast.models.NonFiscalTicket
 import ar.com.orderfast.models.PrintTicketResponse
@@ -891,58 +892,10 @@ class PrintService(private val context: Context) {
         return row
     }
 
-    /**
-     * Suma de totales por ítem (líneas con cantidad > 0).
-     */
-    private fun sumLineTotals(items: List<TicketItem>): Double =
-        items.asSequence().filter { it.quantity > 0 }.sumOf { it.total }
-
-    /**
-     * Subtotal antes del descuento para el bloque de totales.
-     * Con ítems en el ticket se usa la suma de líneas; con lista vacía (p. ej. ticket de caja)
-     * se infiere con [NonFiscalTicket.discountPercent] o [NonFiscalTicket.discountAmount].
-     */
-    private fun orderSubtotalBeforeDiscount(ticket: NonFiscalTicket): Double? {
-        val fromLines = sumLineTotals(ticket.items)
-        if (fromLines > 0) return fromLines
-
-        val pct = ticket.discountPercent
-        if (pct != null && pct > 0 && pct < 100) {
-            return ticket.total / (1 - pct / 100.0)
-        }
-        val amt = ticket.discountAmount
-        if (amt != null && amt > 0) {
-            return ticket.total + amt
-        }
-        return null
-    }
-
-    private fun hasOrderDiscount(ticket: NonFiscalTicket): Boolean {
-        val code = ticket.discountCode?.trim()?.isNotEmpty() == true
-        return code || ticket.discountPercent != null || ticket.discountAmount != null
-    }
-
     /** Misma regla que el ticket ESC/POS: identificador si no es para llevar o si no hay preferencia definida. */
     private fun shouldShowIdentifier(ticket: NonFiscalTicket): Boolean {
         if (ticket.identifier?.trim()?.isNotEmpty() != true) return false
         return ticket.isTakeAway != true
-    }
-
-    /**
-     * Texto de descuento alineado al ticket de referencia (`Descuento: …`).
-     */
-    private fun buildDiscountLine(ticket: NonFiscalTicket): String {
-        val code = ticket.discountCode?.trim()?.takeIf { it.isNotEmpty() }
-        val percent = ticket.discountPercent
-        val amount = ticket.discountAmount
-        return when {
-            code != null && percent != null -> "Descuento: $code ${percent.toInt()}%"
-            code != null && amount != null -> "Descuento: $code ${formatCurrency(amount)}"
-            code != null -> "Descuento: $code"
-            percent != null -> "Descuento: ${percent.toInt()}%"
-            amount != null -> "Descuento: ${formatCurrency(amount)}"
-            else -> ""
-        }
     }
 
     /** Meta superior (preferencia, identificador, descuento) — mismo orden que `_nonFiscalTicketMetaItemsAndTotals`. */
@@ -954,8 +907,8 @@ class PrintService(private val context: Context) {
         if (shouldShowIdentifier(ticket)) {
             layout.addView(createMetaBoldLine("Identificador: ${ticket.identifier!!.trim()}"))
         }
-        if (hasOrderDiscount(ticket)) {
-            val line = buildDiscountLine(ticket)
+        if (NonFiscalReceiptTotals.hasDiscountMeta(ticket)) {
+            val line = NonFiscalReceiptTotals.buildDiscountMetaLine(ticket, ::formatCurrency)
             if (line.isNotEmpty()) {
                 layout.addView(createMetaBoldLine(line))
             }
@@ -1022,19 +975,13 @@ class PrintService(private val context: Context) {
     }
 
     private fun addTotalsBlock(layout: LinearLayout, ticket: NonFiscalTicket) {
-        if (!hasOrderDiscount(ticket)) {
-            layout.addView(createLabelValueTotalRow("Total:", formatCurrency(ticket.total)))
-            return
+        val r = NonFiscalReceiptTotals.resolve(ticket)
+        if (r.showBreakdown) {
+            layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(r.subtotal)))
+            layout.addView(createLabelValueTotalRow("Descuento:", "-${formatCurrency(r.discount)}"))
+            layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(r.total)))
+        } else {
+            layout.addView(createLabelValueTotalRow("Total:", formatCurrency(r.total)))
         }
-        val sub = orderSubtotalBeforeDiscount(ticket)
-        if (sub == null) {
-            // Solo código u otros datos sin monto/porcentaje — no inventar subtotal con ítems vacíos
-            layout.addView(createLabelValueTotalRow("Total:", formatCurrency(ticket.total)))
-            return
-        }
-        val discount = (sub - ticket.total).coerceAtLeast(0.0)
-        layout.addView(createLabelValueTotalRow("Subtotal:", formatCurrency(sub)))
-        layout.addView(createLabelValueTotalRow("Descuento:", "-${formatCurrency(discount)}"))
-        layout.addView(createLabelValueTotalRow("Total con descuento:", formatCurrency(ticket.total)))
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.10
+
+### printer / model
+
+- `NonFiscalTicket`: campos `subtotalBeforeDiscount` y `discountAppliedAmount` para totales del pie ya calculados desde Flutter; el pie deja de inferir montos desde porcentaje/monto informativo cuando enviás ambos valores.
+- `printTicket`, `printTextTicket`, `printCashTicket`: el mapa `nonFiscalTicket` acepta las nuevas claves; `orderToNonFiscalTicket` las rellena cuando la suma de ítems es mayor que el total de la orden.
+
 ## 0.6.5
 
 ### printer

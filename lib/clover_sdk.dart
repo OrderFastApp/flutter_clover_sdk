@@ -315,7 +315,9 @@ class CloverSdkPlugin {
 
   /// Imprime un ticket (fiscal o no fiscal)
   ///
-  /// [nonFiscalTicket] - Datos del ticket no fiscal (opcional). Puede ser un objeto [NonFiscalTicket] o un Map
+  /// [nonFiscalTicket] - Datos del ticket no fiscal (opcional). Puede ser un objeto [NonFiscalTicket] o un Map.
+  /// Para el pie **Subtotal / Descuento / Total** conviene enviar ya calculados
+  /// `subtotalBeforeDiscount` y `discountAppliedAmount` (positivo); ver README sección impresión.
   /// [fiscalTicket] - Datos del ticket fiscal (opcional). Puede ser un objeto [FiscalTicket] o un Map
   ///
   /// Debe proporcionarse uno de los dos tipos de ticket.
@@ -352,8 +354,10 @@ class CloverSdkPlugin {
   ///         'total': 123.0,
   ///       },
   ///     ],
-  ///     'total': 123.0,
+  ///     'total': 135.0,
   ///     'dateTime': '16/01/2026 10:09:49',
+  ///     'subtotalBeforeDiscount': 150.0,
+  ///     'discountAppliedAmount': 15.0,
   ///   },
   /// );
   /// ```
@@ -460,7 +464,8 @@ class CloverSdkPlugin {
 
   /// Imprime un ticket de caja con formato abreviado.
   ///
-  /// Recibe el mismo payload que `printTicket(nonFiscalTicket: ...)`.
+  /// Mismo payload que `printTicket(nonFiscalTicket: ...)`. Para desglose de descuento con `items` vacíos,
+  /// enviá `subtotalBeforeDiscount` y `discountAppliedAmount` ya calculados (además de `total`).
   Future<PrintTicketResponse> printCashTicket({
     required dynamic nonFiscalTicket,
   }) async {

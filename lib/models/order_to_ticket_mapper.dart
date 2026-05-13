@@ -72,6 +72,15 @@ NonFiscalTicket orderToNonFiscalTicket(
     }
   }
 
+  final linesSum =
+      items.fold<double>(0, (sum, i) => sum + (i.quantity > 0 ? i.total : 0));
+  double? subtotalBeforeDiscount;
+  double? discountAppliedAmount;
+  if (order.orderDiscounts != null && linesSum > order.total + 0.0001) {
+    subtotalBeforeDiscount = linesSum;
+    discountAppliedAmount = linesSum - order.total;
+  }
+
   return NonFiscalTicket(
     orderNumber: orderNum,
     items: items,
@@ -84,5 +93,7 @@ NonFiscalTicket orderToNonFiscalTicket(
     discountAmount: order.orderDiscounts?.discountType != 'percentage'
         ? order.orderDiscounts?.discount
         : null,
+    subtotalBeforeDiscount: subtotalBeforeDiscount,
+    discountAppliedAmount: discountAppliedAmount,
   );
 }

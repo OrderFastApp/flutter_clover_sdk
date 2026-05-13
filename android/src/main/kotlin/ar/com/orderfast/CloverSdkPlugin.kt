@@ -784,7 +784,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             disclaimer = disclaimer,
             discountCode = data["discountCode"] as? String,
             discountPercent = (data["discountPercent"] as? Number)?.toDouble(),
-            discountAmount = (data["discountAmount"] as? Number)?.toDouble()
+            discountAmount = (data["discountAmount"] as? Number)?.toDouble(),
+            subtotalBeforeDiscount = (data["subtotalBeforeDiscount"] as? Number)?.toDouble(),
+            discountAppliedAmount = (data["discountAppliedAmount"] as? Number)?.toDouble(),
         )
     }
 

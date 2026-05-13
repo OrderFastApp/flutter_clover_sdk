@@ -177,16 +177,12 @@ class _MyAppState extends State<MyApp> {
       _cloverSdk.printCashTicket(
         nonFiscalTicket: {
           'orderNumber': 'CASH',
-          'items': [
-            {
-              'quantity': 1,
-              'description': 'Ejemplo caja',
-              'subtotal': 10.0,
-              'total': 10.0,
-            },
-          ],
-          'total': 10.0,
+          'items': <Map<String, dynamic>>[],
+          'total': 85.0,
           'dateTime': ts,
+          'subtotalBeforeDiscount': 100.0,
+          'discountAppliedAmount': 15.0,
+          'discountCode': 'PROMO',
         },
       ),
     );

@@ -9,7 +9,8 @@ import android.graphics.Typeface
 import android.util.Base64
 import android.util.Log
 import android.graphics.drawable.BitmapDrawable
-import android.text.TextUtils
+import android.os.Build
+import android.text.Layout
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -952,10 +953,36 @@ class PrintService(private val context: Context) {
     }
 
     /**
-     * Fila `etiqueta` ← → `monto`. El monto va a la derecha en `WRAP_CONTENT` (nunca se parte)
-     * y la etiqueta toma el resto del ancho con `singleLine` (se trunca con `…` si no entrara).
-     * Cuando [compact] es true se reduce el tamaño para que filas con etiquetas largas
-     * como "Total con descuento:" no rompan la línea.
+     * Evita cortes ridículos en montos (`-$ ` / `$ ` → NBSP) para que el símbolo y el número
+     * salten de línea juntos si hace falta.
+     */
+    private fun strengthenCurrencyForWrap(value: String): String =
+        value.replace("-$ ", "-$\u00A0").replace("$ ", "$\u00A0")
+
+    /**
+     * Salto de línea “limpio”: sin guiones automáticos; en API 29+ equilibrado; en API 33+
+     * [LineBreakConfig.LINE_BREAK_WORD_STYLE_PHRASE] para no partir frases de un carácter.
+     */
+    private fun applyReceiptTotalRowTextWrap(tv: TextView) {
+        tv.isSingleLine = false
+        tv.maxLines = 12
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            tv.hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tv.breakStrategy = Layout.BREAK_STRATEGY_BALANCED
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            tv.breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            tv.lineBreakWordStyle =
+                android.graphics.text.LineBreakConfig.LINE_BREAK_WORD_STYLE_PHRASE
+        }
+    }
+
+    /**
+     * Fila `etiqueta` ← → `monto`. Ambos pueden hacer varias líneas; el monto va alineado a la derecha.
+     * Se aplican reglas de salto para evitar guiones raros y cortes de una sola letra en frases.
      */
     private fun createLabelValueTotalRow(label: String, value: String, compact: Boolean = false): View {
         val row = LinearLayout(context).apply {
@@ -978,28 +1005,28 @@ class PrintService(private val context: Context) {
             typeface = robotoMonoBold
             textSize = textSizeSp
             includeFontPadding = false
-            gravity = Gravity.START
-            isSingleLine = true
-            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 1f,
             )
+            applyReceiptTotalRowTextWrap(this)
         })
         row.addView(TextView(context).apply {
-            text = value
+            text = strengthenCurrencyForWrap(value)
             typeface = robotoMonoBold
             textSize = textSizeSp
             includeFontPadding = false
-            gravity = Gravity.END
-            isSingleLine = true
+            gravity = Gravity.END or Gravity.TOP
+            textAlignment = View.TEXT_ALIGNMENT_TEXT_END
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 marginStart = if (is55mmPaper) 4 else 8
             }
+            applyReceiptTotalRowTextWrap(this)
         })
         return row
     }

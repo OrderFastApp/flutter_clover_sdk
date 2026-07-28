@@ -225,7 +225,6 @@ class _MyAppState extends State<MyApp> {
           description: 'Hamburguesa Quimera Doble',
           subtotal: 12000.0,
           total: 12000.0,
-          comment: 'Punto de la carne: Bien cocido',
           subselections: [
             TicketSubselection(
               name: 'Sin cebolla',
@@ -246,7 +245,6 @@ class _MyAppState extends State<MyApp> {
           description: 'Papas Rústicas Grandes',
           subtotal: 4500.0,
           total: 4500.0,
-          comment: 'Sin sal en las papas',
           subselections: [
             TicketSubselection(
               name: 'Salsa Cheddar & Bacon',
@@ -261,7 +259,6 @@ class _MyAppState extends State<MyApp> {
           description: 'Cerveza IPA 500ml',
           subtotal: 4000.0,
           total: 4000.0,
-          comment: 'Servir en vaso de chopp helado',
         ),
       ],
     );

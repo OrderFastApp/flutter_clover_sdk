@@ -14,6 +14,7 @@ class CashTicketTemplate(private val context: Context) {
         val styles = PrintTicketStyles(context, paperProfile)
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

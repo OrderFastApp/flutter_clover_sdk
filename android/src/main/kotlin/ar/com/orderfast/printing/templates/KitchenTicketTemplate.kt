@@ -14,30 +14,33 @@ class KitchenTicketTemplate(private val context: Context) {
         val styles = PrintTicketStyles(context, paperProfile)
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
 
-        // Badge invertido de alta visibilidad para número de turno / orden
-        val badgeTitle = "COMANDA DE COCINA #${dto.orderNumber}"
-        layout.addView(styles.createInvertedBadge(badgeTitle))
+        // Encabezado estándar sin fondo negro
+        layout.addView(styles.createHr("=", styles.lineCharCount))
+        layout.addView(styles.createTextView("COMANDA DE COCINA #${dto.orderNumber}", bold = true, large = true, gravityVal = Gravity.CENTER))
+        layout.addView(styles.createHr("-", styles.lineCharCount))
 
         if (dto.identifier != null && dto.identifier.isNotEmpty()) {
             layout.addView(styles.createTextView("Ubicación: ${dto.identifier}", bold = true, large = true, gravityVal = Gravity.CENTER))
         }
 
+        // Modo de consumo (PARA LLEVAR / PARA COMER AQUI) en Fondo Negro Invertido
         if (dto.isTakeAway != null) {
-            val modeText = if (dto.isTakeAway) "!!! PARA LLEVAR !!!" else "PARA COMER AQUI"
-            layout.addView(styles.createTextView(modeText, bold = true, large = true, gravityVal = Gravity.CENTER))
+            val modeText = if (dto.isTakeAway) "PARA LLEVAR" else "PARA COMER AQUI"
+            layout.addView(styles.createInvertedBadge(modeText))
         }
 
         layout.addView(styles.createHr("=", styles.lineCharCount))
 
-        // Lista de Ítems en tamaño grande (double height/width)
+        // Lista de Ítems en texto grande estándar
         dto.items.forEach { item ->
-            val itemLine = "${item.quantity}x  ${item.description}"
+            val itemLine = "${item.quantity}x ${item.description}"
             layout.addView(styles.createTextView(itemLine, bold = true, large = true))
 
             item.subselections?.forEach { sub ->

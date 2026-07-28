@@ -18,6 +18,7 @@ import java.util.Locale
  * Estilos visuales optimizados para cabezal de impresión térmica Clover.
  * Desactiva el anti-aliased suave (difuminado gris) para que el texto en negrita y estándar
  * se imprima en negro absoluto y nítido (1-bit monocromático).
+ * Compactado al máximo sin paddings innecesarios para aprovechar el papel.
  */
 class PrintTicketStyles(
     private val context: Context,
@@ -100,7 +101,7 @@ class PrintTicketStyles(
             textSize = textSizeStandard
             gravity = Gravity.CENTER_HORIZONTAL
             includeFontPadding = false
-            setPadding(2, 2, 2, 2)
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -112,19 +113,19 @@ class PrintTicketStyles(
         return TextView(context).apply {
             paint.isAntiAlias = false
             paint.isSubpixelText = false
-            text = "  $textVal  "
+            text = " $textVal "
             typeface = robotoMonoBold
             textSize = textSizeLarge
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.BLACK)
             gravity = Gravity.CENTER
-            setPadding(16, 8, 16, 8)
+            setPadding(10, 3, 10, 3)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, 8, 0, 8)
+                setMargins(0, 3, 0, 3)
             }
         }
     }
@@ -148,7 +149,7 @@ class PrintTicketStyles(
             textSize = calculatedSize
             gravity = gravityVal
             includeFontPadding = false
-            setPadding(2, 2, 2, 2)
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -175,7 +176,7 @@ class PrintTicketStyles(
             typeface = if (bold) robotoMonoBold else robotoMono
             textSize = textSizeStandard
             includeFontPadding = false
-            setPadding(2, 2, 2, 2)
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

@@ -20,6 +20,7 @@ class FiscalTicketTemplate(private val context: Context) {
         val styles = PrintTicketStyles(context, paperProfile)
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -33,13 +34,13 @@ class FiscalTicketTemplate(private val context: Context) {
         layout.addView(styles.createTextView(tipoComp.uppercase(), bold = true, large = true, gravityVal = Gravity.CENTER))
         layout.addView(styles.createHr("=", styles.lineCharCount))
 
-        layout.addView(styles.createTextView(info.razonSocial, bold = true, gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView("CUIT: ${info.cuit}", gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView("IIBB: ${info.numeroInscripcionIIBB}", gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView(info.direccion, gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView(info.localidad, gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView("Condición: ${info.responsable}", gravityVal = Gravity.CENTER))
-        layout.addView(styles.createTextView("Inicio Act.: ${info.inicioActividades}", gravityVal = Gravity.CENTER))
+        layout.addView(styles.createTextView(info.razonSocial, bold = true, gravityVal = Gravity.START))
+        layout.addView(styles.createTextView("CUIT: ${info.cuit}", gravityVal = Gravity.START))
+        layout.addView(styles.createTextView("IIBB: ${info.numeroInscripcionIIBB}", gravityVal = Gravity.START))
+        layout.addView(styles.createTextView(info.direccion, gravityVal = Gravity.START))
+        layout.addView(styles.createTextView(info.localidad, gravityVal = Gravity.START))
+        layout.addView(styles.createTextView("Condición: ${info.responsable}", gravityVal = Gravity.START))
+        layout.addView(styles.createTextView("Inicio Act.: ${info.inicioActividades}", gravityVal = Gravity.START))
 
         layout.addView(styles.createHr("-", styles.lineCharCount))
         layout.addView(styles.createTextView("P. Venta: ${info.puntoVenta}  Comp. N°: ${info.numeroT}"))
@@ -90,7 +91,7 @@ class FiscalTicketTemplate(private val context: Context) {
                     setImageBitmap(qrBitmap)
                     layoutParams = LinearLayout.LayoutParams(qrSize, qrSize).apply {
                         gravity = Gravity.CENTER_HORIZONTAL
-                        setMargins(0, 12, 0, 12)
+                        setMargins(0, 4, 0, 4)
                     }
                 }
                 layout.addView(qrImageView)

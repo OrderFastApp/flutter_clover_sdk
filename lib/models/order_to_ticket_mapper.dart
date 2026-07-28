@@ -1,7 +1,8 @@
-import 'non_fiscal_ticket.dart';
+import 'package:clover_sdk/models/ticket/non_fiscal_ticket.dart';
+import 'package:clover_sdk/models/ticket/ticket_item.dart';
+import 'package:clover_sdk/models/ticket/ticket_subselection.dart';
+
 import 'order_ticket_models.dart';
-import 'ticket_item.dart';
-import 'ticket_subselection.dart';
 
 /// Convierte una [TicketOrder] (JSON de la API) en [NonFiscalTicket] para imprimir.
 NonFiscalTicket orderToNonFiscalTicket(
@@ -45,7 +46,9 @@ NonFiscalTicket orderToNonFiscalTicket(
       description: oi.name,
       subtotal: unitPrice,
       total: itemLineTotal,
-      comment: (oi.comment != null && oi.comment!.trim().isNotEmpty) ? oi.comment : null,
+      comment: (oi.comment != null && oi.comment!.trim().isNotEmpty)
+          ? oi.comment
+          : null,
       subselections: subselections.isEmpty ? null : subselections,
     ));
   }

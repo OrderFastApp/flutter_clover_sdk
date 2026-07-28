@@ -431,6 +431,23 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Imprime una Comanda de Cocina (Alta Visibilidad con Badge Invertido) usando [KitchenTicketDto].
+  Future<PrintTicketResponse> printKitchenTicket(
+    KitchenTicketDto kitchenTicket,
+  ) async {
+    try {
+      final result = await _channel.invokeMethod('printKitchenTicket', {
+        'kitchenTicket': kitchenTicket.toMap(),
+      });
+      return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
+    } catch (e) {
+      return PrintTicketResponse(
+        success: false,
+        error: e.toString(),
+      );
+    }
+  }
+
   /// Imprime una imagen desde base64 usando ImagePrintJob2 (Clover SDK).
   ///
   /// [imageBase64] - Imagen codificada en base64. Puede incluir el prefijo

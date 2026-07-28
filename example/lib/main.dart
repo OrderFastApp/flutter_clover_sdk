@@ -120,27 +120,35 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   void _toast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
     );
   }
 
-  Future<void> _invokeMap(String label, Future<Map<String, dynamic>> call) async {
+  Future<void> _invokeMap(
+      String label, Future<Map<String, dynamic>> call) async {
     final r = await call;
     if (!mounted) return;
     final ok = r['success'] == true;
     final detail = ok
-        ? (r.keys.where((k) => k != 'success').map((k) => '$k: ${r[k]}').join(', '))
+        ? (r.keys
+            .where((k) => k != 'success')
+            .map((k) => '$k: ${r[k]}')
+            .join(', '))
         : '${r['error'] ?? r}';
     setState(() {
-      _status = '$label → ${ok ? 'OK' : 'Error'}${detail.isNotEmpty ? ': $detail' : ''}';
+      _status =
+          '$label → ${ok ? 'OK' : 'Error'}${detail.isNotEmpty ? ': $detail' : ''}';
     });
     _toast('$label: ${ok ? 'OK' : 'falló'}');
   }
 
-  Future<void> _invokePrint(String label, Future<PrintTicketResponse> call) async {
+  Future<void> _invokePrint(
+      String label, Future<PrintTicketResponse> call) async {
     final r = await call;
     if (!mounted) return;
     setState(() {
@@ -188,6 +196,49 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Future<void> _printKitchenTicketSample() async {
+    final ts = DateTime.now().toIso8601String();
+    final kitchenTicket = KitchenTicketDto(
+      orderNumber: 'A-73',
+      dateTime: ts,
+      isTakeAway: true,
+      identifier: 'Mesa 4',
+      notes: 'Sin cebolla en la hamburguesa. Entregar primero bebidas.',
+      items: [
+        TicketItem(
+          quantity: 2,
+          description: 'Hamburguesa Doble Cheddar',
+          subtotal: 10000.0,
+          total: 10000.0,
+          subselections: [
+            TicketSubselection(
+              name: 'Sin cebolla',
+              quantity: 1,
+              price: 0.0,
+              total: 500,
+            ),
+            TicketSubselection(
+              name: 'Extra Queso',
+              quantity: 1,
+              price: 500.0,
+              total: 1000,
+            ),
+          ],
+        ),
+        TicketItem(
+          quantity: 1,
+          description: 'Papas Fritas Grandes',
+          subtotal: 3500.0,
+          total: 3500.0,
+        ),
+      ],
+    );
+    await _invokePrint(
+      'printKitchenTicket',
+      _cloverSdk.printKitchenTicket(kitchenTicket),
+    );
+  }
+
   Future<void> _presentQr(double dollars) async {
     if (!_deviceConnected) {
       setState(() => _status = 'QR: dispositivo no conectado');
@@ -224,8 +275,12 @@ class _MyAppState extends State<MyApp> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enviar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enviar')),
         ],
       ),
     );
@@ -273,6 +328,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Clover SDK Example'),
@@ -343,13 +399,20 @@ class _MyAppState extends State<MyApp> {
                     _deviceConnected ? () => _presentQr(5) : null),
               ]),
               _section('Pantalla / inmersivo', [
-                _btn('keepScreenOn(true)',
-                    () => _invokeMap('keepScreenOn', _cloverSdk.keepScreenOn(keepOn: true))),
-                _btn('keepScreenOn(false)',
-                    () => _invokeMap('keepScreenOn', _cloverSdk.keepScreenOn(keepOn: false))),
-                _btn('releaseScreenOn',
-                    () => _invokeMap('releaseScreenOn', _cloverSdk.releaseScreenOn())),
-                _btn('setImmersiveMode (ocultar barras)',
+                _btn(
+                    'keepScreenOn(true)',
+                    () => _invokeMap(
+                        'keepScreenOn', _cloverSdk.keepScreenOn(keepOn: true))),
+                _btn(
+                    'keepScreenOn(false)',
+                    () => _invokeMap('keepScreenOn',
+                        _cloverSdk.keepScreenOn(keepOn: false))),
+                _btn(
+                    'releaseScreenOn',
+                    () => _invokeMap(
+                        'releaseScreenOn', _cloverSdk.releaseScreenOn())),
+                _btn(
+                    'setImmersiveMode (ocultar barras)',
                     () => _invokeMap(
                           'setImmersiveMode',
                           _cloverSdk.setImmersiveMode(
@@ -357,16 +420,24 @@ class _MyAppState extends State<MyApp> {
                             hideNavigationBar: true,
                           ),
                         )),
-                _btn('exitImmersiveMode',
-                    () => _invokeMap('exitImmersiveMode', _cloverSdk.exitImmersiveMode())),
+                _btn(
+                    'exitImmersiveMode',
+                    () => _invokeMap(
+                        'exitImmersiveMode', _cloverSdk.exitImmersiveMode())),
               ]),
               _section('Modo kiosco (¡cuidado en dispositivo real!)', [
-                _btn('enableKioskMode',
-                    () => _invokeMap('enableKioskMode', _cloverSdk.enableKioskMode())),
-                _btn('disableKioskMode',
-                    () => _invokeMap('disableKioskMode', _cloverSdk.disableKioskMode())),
-                _btn('isKioskModeActive',
-                    () => _invokeMap('isKioskModeActive', _cloverSdk.isKioskModeActive())),
+                _btn(
+                    'enableKioskMode',
+                    () => _invokeMap(
+                        'enableKioskMode', _cloverSdk.enableKioskMode())),
+                _btn(
+                    'disableKioskMode',
+                    () => _invokeMap(
+                        'disableKioskMode', _cloverSdk.disableKioskMode())),
+                _btn(
+                    'isKioskModeActive',
+                    () => _invokeMap(
+                        'isKioskModeActive', _cloverSdk.isKioskModeActive())),
               ]),
               _section('Screensaver', [
                 _btn(
@@ -375,14 +446,22 @@ class _MyAppState extends State<MyApp> {
                           'enableScreensaver',
                           _cloverSdk.enableScreensaver(activateOnSleep: true),
                         )),
-                _btn('disableScreensaver',
-                    () => _invokeMap('disableScreensaver', _cloverSdk.disableScreensaver())),
-                _btn('startScreensaver',
-                    () => _invokeMap('startScreensaver', _cloverSdk.startScreensaver())),
-                _btn('isScreensaverEnabled',
-                    () => _invokeMap('isScreensaverEnabled', _cloverSdk.isScreensaverEnabled())),
-                _btn('isScreensaverSupported',
-                    () => _invokeMap('isScreensaverSupported', _cloverSdk.isScreensaverSupported())),
+                _btn(
+                    'disableScreensaver',
+                    () => _invokeMap(
+                        'disableScreensaver', _cloverSdk.disableScreensaver())),
+                _btn(
+                    'startScreensaver',
+                    () => _invokeMap(
+                        'startScreensaver', _cloverSdk.startScreensaver())),
+                _btn(
+                    'isScreensaverEnabled',
+                    () => _invokeMap('isScreensaverEnabled',
+                        _cloverSdk.isScreensaverEnabled())),
+                _btn(
+                    'isScreensaverSupported',
+                    () => _invokeMap('isScreensaverSupported',
+                        _cloverSdk.isScreensaverSupported())),
                 _btn('setScreensaverDreamComponent…', _dialogDreamComponent),
               ]),
               _section('Impresión', [
@@ -392,24 +471,25 @@ class _MyAppState extends State<MyApp> {
                         _cloverSdk.printTestNonFiscalTicket())),
                 _btn(
                     'printTestNonFiscalTicket (texto)',
-                    () => _invokePrint(
-                        'printTestNonFiscalTicket texto',
+                    () => _invokePrint('printTestNonFiscalTicket texto',
                         _cloverSdk.printTestNonFiscalTicket(textTicket: true))),
                 _btn(
                     'printTestFiscalTicket',
-                    () => _invokePrint(
-                        'printTestFiscalTicket', _cloverSdk.printTestFiscalTicket())),
+                    () => _invokePrint('printTestFiscalTicket',
+                        _cloverSdk.printTestFiscalTicket())),
                 _btn(
                     'printTestFiscalTicket (texto)',
-                    () => _invokePrint(
-                        'printTestFiscalTicket texto',
+                    () => _invokePrint('printTestFiscalTicket texto',
                         _cloverSdk.printTestFiscalTicket(textTicket: true))),
                 _btn('printCashTicket', _printCashTicketSample),
+                _btn('printKitchenTicket (Cocina DTO)',
+                    _printKitchenTicketSample),
                 _btn(
                     'printOrderTicket (JSON orden)',
                     () => _invokePrint(
                           'printOrderTicket',
-                          _cloverSdk.printOrderTicket(order: _sampleOrderForPrint),
+                          _cloverSdk.printOrderTicket(
+                              order: _sampleOrderForPrint),
                         )),
                 _btn(
                     'printOrderTicket (texto)',
@@ -432,7 +512,8 @@ class _MyAppState extends State<MyApp> {
                     'initialize (reintentar)',
                     () => _invokeMap(
                           'initialize',
-                          _cloverSdk.initialize(remoteApplicationId: 'TU_RAID_AQUI'),
+                          _cloverSdk.initialize(
+                              remoteApplicationId: 'TU_RAID_AQUI'),
                         )),
               ]),
             ],

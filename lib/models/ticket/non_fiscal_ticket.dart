@@ -1,6 +1,7 @@
+import 'paper_profile.dart';
 import 'ticket_item.dart';
 
-/// Modelo que representa un ticket no fiscal
+/// Modelo que representa un ticket no fiscal (Comprobante de Venta / Cliente / Caja)
 class NonFiscalTicket {
   /// Número de pedido
   final String orderNumber;
@@ -23,20 +24,23 @@ class NonFiscalTicket {
   /// Texto de disclaimer (por defecto: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA.")
   final String? disclaimer;
 
-  /// Código o etiqueta del descuento (ej: "descuentito"). Opcional; línea informativa arriba del ticket.
+  /// Código o etiqueta del descuento (ej: "descuentito"). Opcional.
   final String? discountCode;
 
-  /// Porcentaje de descuento (ej: 50 para 50%). Opcional; línea informativa.
+  /// Porcentaje de descuento (ej: 50 para 50%). Opcional.
   final double? discountPercent;
 
-  /// Monto informativo del descuento para el encabezado (texto "Descuento: …"). No reemplaza al pie numérico.
+  /// Monto informativo del descuento para el encabezado.
   final double? discountAmount;
 
-  /// Subtotal antes del descuento para el **pie** del ticket (Subtotal / Descuento / Total). Enviar ya calculado.
+  /// Subtotal antes del descuento para el pie del ticket.
   final double? subtotalBeforeDiscount;
 
-  /// Monto del descuento aplicado (positivo) para el pie ("Descuento: -$…"). Enviar ya calculado.
+  /// Monto del descuento aplicado (positivo) para el pie.
   final double? discountAppliedAmount;
+
+  /// Perfil de ancho de papel deseado (por defecto [PaperProfile.auto] para detección física de hardware)
+  final PaperProfile paperProfile;
 
   NonFiscalTicket({
     required this.orderNumber,
@@ -51,6 +55,7 @@ class NonFiscalTicket {
     this.discountAmount,
     this.subtotalBeforeDiscount,
     this.discountAppliedAmount,
+    this.paperProfile = PaperProfile.auto,
   });
 
   /// Convierte el modelo a un Map para enviarlo al plugin nativo
@@ -68,34 +73,29 @@ class NonFiscalTicket {
       if (discountAmount != null) 'discountAmount': discountAmount,
       if (subtotalBeforeDiscount != null) 'subtotalBeforeDiscount': subtotalBeforeDiscount,
       if (discountAppliedAmount != null) 'discountAppliedAmount': discountAppliedAmount,
+      'paperProfile': paperProfile.name,
     };
   }
 
   /// Crea un NonFiscalTicket desde un Map
   factory NonFiscalTicket.fromMap(Map<String, dynamic> map) {
     return NonFiscalTicket(
-      orderNumber: map['orderNumber'] as String,
-      items: (map['items'] as List<dynamic>)
-          .map((item) => TicketItem.fromMap(item as Map<String, dynamic>))
-          .toList(),
-      total: (map['total'] as num).toDouble(),
-      dateTime: map['dateTime'] as String,
+      orderNumber: map['orderNumber'] as String? ?? '',
+      items: (map['items'] as List<dynamic>?)
+              ?.map((item) => TicketItem.fromMap(item as Map<String, dynamic>))
+              .toList() ??
+          [],
+      total: (map['total'] as num?)?.toDouble() ?? 0.0,
+      dateTime: map['dateTime'] as String? ?? '',
       isTakeAway: map['isTakeAway'] as bool?,
       identifier: map['identifier'] as String?,
       disclaimer: map['disclaimer'] as String?,
       discountCode: map['discountCode'] as String?,
-      discountPercent: map['discountPercent'] != null
-          ? (map['discountPercent'] as num).toDouble()
-          : null,
-      discountAmount: map['discountAmount'] != null
-          ? (map['discountAmount'] as num).toDouble()
-          : null,
-      subtotalBeforeDiscount: map['subtotalBeforeDiscount'] != null
-          ? (map['subtotalBeforeDiscount'] as num).toDouble()
-          : null,
-      discountAppliedAmount: map['discountAppliedAmount'] != null
-          ? (map['discountAppliedAmount'] as num).toDouble()
-          : null,
+      discountPercent: (map['discountPercent'] as num?)?.toDouble(),
+      discountAmount: (map['discountAmount'] as num?)?.toDouble(),
+      subtotalBeforeDiscount: (map['subtotalBeforeDiscount'] as num?)?.toDouble(),
+      discountAppliedAmount: (map['discountAppliedAmount'] as num?)?.toDouble(),
+      paperProfile: PaperProfileExtension.fromString(map['paperProfile'] as String?),
     );
   }
 }

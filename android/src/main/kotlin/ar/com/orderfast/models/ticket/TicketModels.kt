@@ -1,8 +1,4 @@
-package ar.com.orderfast.models
-
-/**
- * Modelos de datos para impresión de tickets
- */
+package ar.com.orderfast.models.ticket
 
 /**
  * Subselección de un item (modificador, opción adicional, etc.)
@@ -27,7 +23,7 @@ data class TicketItem(
 )
 
 /**
- * Información fiscal del ticket
+ * Información fiscal del ticket AFIP
  */
 data class FiscalInfo(
     val razonSocial: String,
@@ -50,10 +46,7 @@ data class FiscalInfo(
 )
 
 /**
- * Ticket no fiscal.
- *
- * [subtotalBeforeDiscount] y [discountAppliedAmount]: montos del pie del recibo (enviar ya calculados desde la app).
- * [discountCode], [discountPercent], [discountAmount]: solo texto informativo del descuento en el encabezado.
+ * Ticket no fiscal (Comprobante de Venta / Cliente / Caja)
  */
 data class NonFiscalTicket(
     val orderNumber: String,
@@ -68,10 +61,11 @@ data class NonFiscalTicket(
     val discountAmount: Double? = null,
     val subtotalBeforeDiscount: Double? = null,
     val discountAppliedAmount: Double? = null,
+    val paperProfile: PaperProfile = PaperProfile.AUTO
 )
 
 /**
- * Ticket fiscal
+ * Ticket fiscal (AFIP)
  */
 data class FiscalTicket(
     val orderNumber: String? = null,
@@ -79,15 +73,8 @@ data class FiscalTicket(
     val total: Double,
     val dateTime: String,
     val fiscalInfo: FiscalInfo,
-    val tipoComprobante: String? = null
-)
-
-/**
- * Request para imprimir un ticket
- */
-data class PrintTicketRequest(
-    val nonFiscalTicket: NonFiscalTicket? = null,
-    val fiscalTicket: FiscalTicket? = null
+    val tipoComprobante: String? = null,
+    val paperProfile: PaperProfile = PaperProfile.AUTO
 )
 
 /**

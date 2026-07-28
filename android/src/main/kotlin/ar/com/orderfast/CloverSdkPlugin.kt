@@ -7,12 +7,14 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import ar.com.orderfast.models.PaymentRequest
 import ar.com.orderfast.models.QrPaymentRequest
-import ar.com.orderfast.models.NonFiscalTicket
-import ar.com.orderfast.models.FiscalTicket
-import ar.com.orderfast.models.TicketItem
-import ar.com.orderfast.models.TicketSubselection
-import ar.com.orderfast.models.FiscalInfo
-import ar.com.orderfast.models.PrintTicketResponse
+import ar.com.orderfast.models.ticket.NonFiscalTicket
+import ar.com.orderfast.models.ticket.FiscalTicket
+import ar.com.orderfast.models.ticket.TicketItem
+import ar.com.orderfast.models.ticket.TicketSubselection
+import ar.com.orderfast.models.ticket.FiscalInfo
+import ar.com.orderfast.models.ticket.PrintTicketResponse
+import ar.com.orderfast.models.ticket.KitchenTicketDto
+import ar.com.orderfast.models.ticket.PaperProfile
 import ar.com.orderfast.services.PaymentService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
@@ -81,6 +83,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "isScreensaverEnabled" -> isScreensaverEnabled(result)
                 "isScreensaverSupported" -> isScreensaverSupported(result)
                 "printTicket" -> printTicket(call, result)
+                "printKitchenTicket" -> printKitchenTicket(call, result)
                 "printCashTicket" -> printCashTicket(call, result)
                 "printTextTicket" -> printTextTicket(call, result)
                 "printImage" -> printImage(call, result)
@@ -787,6 +790,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             discountAmount = (data["discountAmount"] as? Number)?.toDouble(),
             subtotalBeforeDiscount = (data["subtotalBeforeDiscount"] as? Number)?.toDouble(),
             discountAppliedAmount = (data["discountAppliedAmount"] as? Number)?.toDouble(),
+            paperProfile = PaperProfile.fromString(data["paperProfile"] as? String)
         )
     }
 
@@ -847,7 +851,74 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             total = total,
             dateTime = dateTime,
             fiscalInfo = fiscalInfo,
-            tipoComprobante = tipoComprobante
+            tipoComprobante = tipoComprobante,
+            paperProfile = PaperProfile.fromString(data["paperProfile"] as? String)
+        )
+    }
+
+    private fun printKitchenTicket(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val printContext = activity ?: context
+            if (printService == null) printService = PrintService(printContext)
+
+            val kitchenData = call.argument<Map<String, Any>>("kitchenTicket")
+                ?: run {
+                    result.error("MISSING_TICKET", "Se requiere kitchenTicket", null)
+                    return
+                }
+
+            val dto = parseKitchenTicketDto(kitchenData)
+            printService?.printKitchenTicket(dto) { response ->
+                if (response.success) {
+                    result.success(mapOf("success" to true, "message" to response.message))
+                } else {
+                    result.error("PRINT_ERROR", response.error, null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al imprimir kitchen ticket", e)
+            result.error("PRINT_ERROR", e.message, null)
+        }
+    }
+
+    private fun parseKitchenTicketDto(data: Map<String, Any>): KitchenTicketDto {
+        val orderNumber = data["orderNumber"] as? String ?: ""
+        val dateTime = data["dateTime"] as? String ?: ""
+        val isTakeAway = data["isTakeAway"] as? Boolean
+        val identifier = data["identifier"] as? String
+        val notes = data["notes"] as? String
+        val profileStr = data["paperProfile"] as? String
+
+        val itemsData = data["items"] as? List<Map<String, Any>> ?: emptyList()
+        val items = itemsData.map { itemData ->
+            val subselectionsData = itemData["subselections"] as? List<Map<String, Any>>
+            val subselections = subselectionsData?.map { subData ->
+                TicketSubselection(
+                    name = subData["name"] as? String ?: "",
+                    quantity = (subData["quantity"] as? Number)?.toInt() ?: 0,
+                    price = (subData["price"] as? Number)?.toDouble() ?: 0.0,
+                    total = (subData["total"] as? Number)?.toDouble() ?: 0.0
+                )
+            }
+
+            TicketItem(
+                quantity = (itemData["quantity"] as? Number)?.toInt() ?: 0,
+                description = itemData["description"] as? String ?: "",
+                subtotal = (itemData["subtotal"] as? Number)?.toDouble() ?: 0.0,
+                total = (itemData["total"] as? Number)?.toDouble() ?: 0.0,
+                comment = itemData["comment"] as? String,
+                subselections = subselections
+            )
+        }
+
+        return KitchenTicketDto(
+            orderNumber = orderNumber,
+            items = items,
+            dateTime = dateTime,
+            isTakeAway = isTakeAway,
+            identifier = identifier,
+            notes = notes,
+            paperProfile = PaperProfile.fromString(profileStr)
         )
     }
 

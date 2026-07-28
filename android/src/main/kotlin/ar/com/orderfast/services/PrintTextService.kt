@@ -3,11 +3,11 @@ package ar.com.orderfast.services
 import android.accounts.Account
 import android.content.Context
 import android.util.Log
-import ar.com.orderfast.models.FiscalTicket
-import ar.com.orderfast.models.NonFiscalTicket
-import ar.com.orderfast.models.PrintTicketResponse
-import ar.com.orderfast.models.TicketItem
-import ar.com.orderfast.models.TicketSubselection
+import ar.com.orderfast.models.ticket.FiscalTicket
+import ar.com.orderfast.models.ticket.NonFiscalTicket
+import ar.com.orderfast.models.ticket.PrintTicketResponse
+import ar.com.orderfast.models.ticket.TicketItem
+import ar.com.orderfast.models.ticket.TicketSubselection
 import ar.com.orderfast.printing.NonFiscalReceiptTotals
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.printer.job.TextPrintJob

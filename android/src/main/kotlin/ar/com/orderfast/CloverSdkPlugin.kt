@@ -22,7 +22,6 @@ import ar.com.orderfast.services.QrPaymentService
 import ar.com.orderfast.services.ScreensaverService
 import ar.com.orderfast.services.PrintService
 import android.content.ComponentName
-import ar.com.orderfast.services.PrintTextService
 import com.clover.sdk.v3.merchant.MerchantDevicesV2Connector
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -51,7 +50,6 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var immersiveModeService: ImmersiveModeService? = null
     private var screensaverService: ScreensaverService? = null
     private var printService: PrintService? = null
-    private var printTextService: PrintTextService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -85,7 +83,6 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "printTicket" -> printTicket(call, result)
                 "printKitchenTicket" -> printKitchenTicket(call, result)
                 "printCashTicket" -> printCashTicket(call, result)
-                "printTextTicket" -> printTextTicket(call, result)
                 "printImage" -> printImage(call, result)
                 else -> result.notImplemented()
             }
@@ -132,9 +129,6 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
             // Inicializar el servicio de impresión
             printService = PrintService(context)
-
-            // Inicializar el servicio de texto en impresora
-            printTextService = PrintTextService(context)
 
             logCloverDeviceModel()
 
@@ -588,55 +582,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
-    private fun printTextTicket(call: MethodCall, result: MethodChannel.Result) {
-        try {
-            // Para Flutter, usar el contexto de la Activity si está disponible, sino el ApplicationContext
-            val printContext = activity ?: context
 
-            // Crear o obtener el servicio de impresión
-            if (printTextService == null) {
-                printTextService = PrintTextService(printContext)
-            }
-
-            val nonFiscalData = call.argument<Map<String, Any>>("nonFiscalTicket")
-            val fiscalData = call.argument<Map<String, Any>>("fiscalTicket")
-
-            when {
-                nonFiscalData != null -> {
-                    val ticket = parseNonFiscalTicket(nonFiscalData)
-                    printTextService?.printNonFiscalTicket(ticket) { response: PrintTicketResponse ->
-                        if (response.success) {
-                            result.success(mapOf(
-                                "success" to true,
-                                "message" to response.message
-                            ))
-                        } else {
-                            result.error("PRINT_ERROR", response.error, null)
-                        }
-                    }
-                }
-                fiscalData != null -> {
-                    val ticket = parseFiscalTicket(fiscalData)
-                    printTextService?.printFiscalTicket(ticket) { response: PrintTicketResponse ->
-                        if (response.success) {
-                            result.success(mapOf(
-                                "success" to true,
-                                "message" to response.message
-                            ))
-                        } else {
-                            result.error("PRINT_ERROR", response.error, null)
-                        }
-                    }
-                }
-                else -> {
-                    result.error("MISSING_TICKET", "Debe proporcionar nonFiscalTicket o fiscalTicket", null)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error al imprimir ticket", e)
-            result.error("PRINT_ERROR", e.message, null)
-        }
-    }
 
     private fun printImage(call: MethodCall, result: MethodChannel.Result) {
         try {

@@ -632,25 +632,7 @@ class _MyAppState extends State<MyApp> {
                   ),
                 ),
                 _printCard(
-                  title: '🔤 6. Ticket Cliente (Texto Plano ASCII)',
-                  templateName: 'N/A (Motor TextPrintJob de Clover)',
-                  description:
-                      'Modo alternativo/legacy sin diseño gráfico. Imprime solo caracteres de texto plano ASCII en monospaciado puro.',
-                  mode: 'Texto Plano (TextPrintJob)',
-                  onPressed: () => _invokePrint('printTestNonFiscalTicket texto',
-                      _cloverSdk.printTestNonFiscalTicket(textTicket: true)),
-                ),
-                _printCard(
-                  title: '🔤 7. Ticket Fiscal (Texto Plano ASCII)',
-                  templateName: 'N/A (Motor TextPrintJob de Clover)',
-                  description:
-                      'Modo alternativo de texto plano para comprobantes fiscales (sin gráficos ni código QR).',
-                  mode: 'Texto Plano (TextPrintJob)',
-                  onPressed: () => _invokePrint('printTestFiscalTicket texto',
-                      _cloverSdk.printTestFiscalTicket(textTicket: true)),
-                ),
-                _printCard(
-                  title: '🖼️ 8. Impresión de Imagen PNG',
+                  title: '🖼️ 6. Impresión de Imagen PNG',
                   templateName: 'N/A (Motor ImagePrintJob2 de Clover)',
                   description:
                       'Imprime directamente gráficos, marcas de agua o imágenes codificadas en base64.',

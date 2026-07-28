@@ -18,7 +18,7 @@ import java.util.Locale
  * Estilos visuales optimizados para cabezal de impresión térmica Clover.
  * Desactiva el anti-aliased suave (difuminado gris) para que el texto en negrita y estándar
  * se imprima en negro absoluto y nítido (1-bit monocromático).
- * Compactado al máximo sin paddings innecesarios para aprovechar el papel.
+ * Ultra compactado con interlineado ajustado y márgenes mínimos.
  */
 class PrintTicketStyles(
     private val context: Context,
@@ -101,6 +101,7 @@ class PrintTicketStyles(
             textSize = textSizeStandard
             gravity = Gravity.CENTER_HORIZONTAL
             includeFontPadding = false
+            setLineSpacing(0f, 0.75f)
             setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -119,13 +120,13 @@ class PrintTicketStyles(
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.BLACK)
             gravity = Gravity.CENTER
-            setPadding(10, 3, 10, 3)
+            setPadding(6, 1, 6, 1)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, 3, 0, 3)
+                setMargins(0, 1, 0, 1)
             }
         }
     }
@@ -149,6 +150,7 @@ class PrintTicketStyles(
             textSize = calculatedSize
             gravity = gravityVal
             includeFontPadding = false
+            setLineSpacing(0f, 0.88f)
             setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -176,6 +178,7 @@ class PrintTicketStyles(
             typeface = if (bold) robotoMonoBold else robotoMono
             textSize = textSizeStandard
             includeFontPadding = false
+            setLineSpacing(0f, 0.88f)
             setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

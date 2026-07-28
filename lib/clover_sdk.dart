@@ -399,7 +399,6 @@ class CloverSdkPlugin {
   Future<PrintTicketResponse> printTicket({
     dynamic nonFiscalTicket,
     dynamic fiscalTicket,
-    bool textTicket = false,
   }) async {
     try {
       if (nonFiscalTicket == null && fiscalTicket == null) {
@@ -420,8 +419,7 @@ class CloverSdkPlugin {
             fiscalTicket is FiscalTicket ? fiscalTicket.toMap() : fiscalTicket;
       }
 
-      final result = await _channel.invokeMethod(
-          textTicket ? 'printTextTicket' : 'printTicket', arguments);
+      final result = await _channel.invokeMethod('printTicket', arguments);
       return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
     } catch (e) {
       return PrintTicketResponse(
@@ -526,7 +524,6 @@ class CloverSdkPlugin {
     String? dateTime,
     bool? isTakeAway,
     String? identifier,
-    bool textTicket = false,
   }) async {
     try {
       final ticketOrder = TicketOrder.fromJson(order);
@@ -537,10 +534,7 @@ class CloverSdkPlugin {
         isTakeAway: isTakeAway,
         identifier: identifier,
       );
-      return await printTicket(
-        nonFiscalTicket: nonFiscal,
-        textTicket: textTicket,
-      );
+      return await printTicket(nonFiscalTicket: nonFiscal);
     } catch (e) {
       return PrintTicketResponse(
         success: false,
@@ -550,21 +544,7 @@ class CloverSdkPlugin {
   }
 
   /// Imprime un ticket no fiscal de prueba con datos mockeados
-  ///
-  /// Esta función crea un ticket no fiscal de ejemplo basado en los datos
-  /// de las imágenes proporcionadas para pruebas.
-  ///
-  /// Ejemplo de uso:
-  /// ```dart
-  /// final result = await cloverSdk.printTestNonFiscalTicket();
-  /// if (result.success) {
-  ///   print('Ticket impreso correctamente');
-  /// } else {
-  ///   print('Error: ${result.error}');
-  /// }
-  /// ```
-  Future<PrintTicketResponse> printTestNonFiscalTicket(
-      {bool textTicket = false}) async {
+  Future<PrintTicketResponse> printTestNonFiscalTicket() async {
     final now = DateTime.now();
     final timestamp = _formatDateTime(now);
 
@@ -624,13 +604,11 @@ class CloverSdkPlugin {
       ],
     );
 
-    return await printTicket(
-        nonFiscalTicket: testTicket, textTicket: textTicket);
+    return await printTicket(nonFiscalTicket: testTicket);
   }
 
   /// Imprime un ticket fiscal de prueba con datos mockeados completos
-  Future<PrintTicketResponse> printTestFiscalTicket(
-      {bool textTicket = false}) async {
+  Future<PrintTicketResponse> printTestFiscalTicket() async {
     final now = DateTime.now();
     final fecha = _formatDate(now);
     final timestamp = _formatDateTime(now);
@@ -683,7 +661,7 @@ class CloverSdkPlugin {
       ),
     );
 
-    return await printTicket(fiscalTicket: testTicket, textTicket: textTicket);
+    return await printTicket(fiscalTicket: testTicket);
   }
 
   /// Formatea una fecha como dd/MM/yyyy

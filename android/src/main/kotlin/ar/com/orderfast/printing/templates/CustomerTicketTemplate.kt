@@ -89,14 +89,13 @@ class CustomerTicketTemplate(private val context: Context) {
         layout.addView(styles.createTextView("TOTAL: $finalTotalStr", bold = true, large = true, gravityVal = Gravity.END))
 
         layout.addView(styles.createHr("=", styles.lineCharCount))
-        layout.addView(styles.createTextView("----- ${ticket.dateTime} -----", gravityVal = Gravity.CENTER, small = true))
 
-        // Disclaimer
-        if (!ticket.disclaimer.isNullOrEmpty()) {
-            layout.addView(styles.createHr("*", 20))
-            layout.addView(styles.createTextView(ticket.disclaimer, bold = true, gravityVal = Gravity.CENTER, small = true))
-            layout.addView(styles.createHr("*", 20))
+        val disclaimerText = ticket.disclaimer ?: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
+        if (disclaimerText.isNotEmpty()) {
+            layout.addView(styles.createTextView(disclaimerText, bold = true, small = true, gravityVal = Gravity.CENTER))
         }
+
+        layout.addView(styles.createTextView("----- ${ticket.dateTime} -----", gravityVal = Gravity.CENTER, small = true))
 
         return layout
     }

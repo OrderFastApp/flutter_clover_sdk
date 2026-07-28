@@ -27,7 +27,7 @@ class PrintTicketStyles(
     val is55mm: Boolean = profile == PaperProfile.MM55
 
     val printerWidthPx: Int = if (is55mm) 384 else 576
-    val lineCharCount: Int = if (is55mm) 22 else 32
+    val lineCharCount: Int = if (is55mm) 32 else 44
 
     val robotoMono: Typeface by lazy {
         ResourcesCompat.getFont(context, R.font.roboto_mono) ?: Typeface.MONOSPACE
@@ -53,9 +53,9 @@ class PrintTicketStyles(
 
     val columns: Columns
         get() = if (is55mm) {
-            Columns(qty = 3, desc = 13, subtotal = 9, total = 9)
+            Columns(qty = 3, desc = 15, subtotal = 7, total = 7)
         } else {
-            Columns(qty = 5, desc = 22, subtotal = 12, total = 12)
+            Columns(qty = 4, desc = 22, subtotal = 9, total = 9)
         }
 
     private val argSymbols: DecimalFormatSymbols by lazy {

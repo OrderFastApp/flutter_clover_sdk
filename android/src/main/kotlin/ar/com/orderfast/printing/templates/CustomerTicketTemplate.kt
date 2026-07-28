@@ -90,7 +90,7 @@ class CustomerTicketTemplate(private val context: Context) {
 
         layout.addView(styles.createHr("=", styles.lineCharCount))
 
-        val disclaimerText = ticket.disclaimer ?: "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA."
+        val disclaimerText = ticket.disclaimer ?: "Ticket no válido como factura"
         if (disclaimerText.isNotEmpty()) {
             layout.addView(styles.createTextView(disclaimerText, bold = true, small = true, gravityVal = Gravity.CENTER))
         }

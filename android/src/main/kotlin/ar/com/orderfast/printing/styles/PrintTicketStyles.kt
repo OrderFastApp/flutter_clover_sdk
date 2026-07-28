@@ -14,6 +14,11 @@ import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
 
+/**
+ * Estilos visuales optimizados para cabezal de impresión térmica Clover.
+ * Desactiva el anti-aliased suave (difuminado gris) para que el texto en negrita y estándar
+ * se imprima en negro absoluto y nítido (1-bit monocromático).
+ */
 class PrintTicketStyles(
     private val context: Context,
     val profile: PaperProfile
@@ -78,8 +83,18 @@ class PrintTicketStyles(
         return if (alignEnd) truncated.padStart(width) else truncated.padEnd(width)
     }
 
+    /**
+     * Aplica optimización monocromática estricta (sin difuminado de píxeles grises).
+     */
+    private fun TextView.applyThermalOptimizations() {
+        paint.isAntiAlias = false
+        paint.isSubpixelText = false
+        setTextColor(Color.BLACK)
+    }
+
     fun createHr(char: String = "-", length: Int = lineCharCount): TextView {
         return TextView(context).apply {
+            applyThermalOptimizations()
             text = char.repeat(length)
             typeface = robotoMono
             textSize = textSizeStandard
@@ -95,6 +110,8 @@ class PrintTicketStyles(
 
     fun createInvertedBadge(textVal: String): TextView {
         return TextView(context).apply {
+            paint.isAntiAlias = false
+            paint.isSubpixelText = false
             text = "  $textVal  "
             typeface = robotoMonoBold
             textSize = textSizeLarge
@@ -125,6 +142,7 @@ class PrintTicketStyles(
             else -> textSizeStandard
         }
         return TextView(context).apply {
+            applyThermalOptimizations()
             text = textVal
             typeface = if (bold) robotoMonoBold else robotoMono
             textSize = calculatedSize
@@ -152,6 +170,7 @@ class PrintTicketStyles(
                 fixedCell(total, c.total, alignEnd = true)
 
         return TextView(context).apply {
+            applyThermalOptimizations()
             text = line
             typeface = if (bold) robotoMonoBold else robotoMono
             textSize = textSizeStandard

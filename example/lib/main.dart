@@ -25,20 +25,33 @@ class _MyAppState extends State<MyApp> {
   Map<String, dynamic>? _lastQrPayment;
 
   static const Map<String, dynamic> _sampleOrderForPrint = {
-    'id': 'order-demo-1',
-    'created_at': '2026-05-11T12:00:00.000Z',
-    'total': 15.5,
+    'id': 'order-demo-8912',
+    'created_at': '2026-07-28T11:20:00.000Z',
+    'total': 18500.0,
     'order_items': [
       {
-        'name': 'Café',
-        'price': 5.0,
+        'name': 'Hamburguesa Quimera Doble',
+        'price': 6000.0,
         'quantity': 2,
-        'order_sub_selection': <Map<String, dynamic>>[],
+        'comment': 'Punto de la carne: A punto',
+        'order_sub_selection': [
+          {'name': 'Extra Queso Cheddar', 'quantity': 2, 'price': 1000.0},
+          {'name': 'Sin Cebolla', 'quantity': 1, 'price': 0.0},
+        ],
       },
       {
-        'name': 'Medialunas',
-        'price': 5.5,
+        'name': 'Papas Rústicas Grandes',
+        'price': 3500.0,
         'quantity': 1,
+        'comment': 'Extra picante',
+        'order_sub_selection': [
+          {'name': 'Salsa Cheddar & Bacon', 'quantity': 1, 'price': 1000.0},
+        ],
+      },
+      {
+        'name': 'Gaseosa Coca-Cola 500ml',
+        'price': 1500.0,
+        'quantity': 2,
         'order_sub_selection': <Map<String, dynamic>>[],
       },
     ],
@@ -203,33 +216,50 @@ class _MyAppState extends State<MyApp> {
       dateTime: ts,
       isTakeAway: true,
       identifier: 'Mesa 4',
-      notes: 'Sin cebolla en la hamburguesa. Entregar primero bebidas.',
+      notes: '🚨 URGENTE: Cliente alérgico a las nueces. Servir bebidas primero.',
       items: [
         TicketItem(
           quantity: 2,
-          description: 'Hamburguesa Doble Cheddar',
-          subtotal: 10000.0,
-          total: 10000.0,
+          description: 'Hamburguesa Quimera Doble',
+          subtotal: 12000.0,
+          total: 12000.0,
+          comment: 'Punto de la carne: Bien cocido',
           subselections: [
             TicketSubselection(
               name: 'Sin cebolla',
               quantity: 1,
               price: 0.0,
-              total: 500,
+              total: 0.0,
             ),
             TicketSubselection(
-              name: 'Extra Queso',
-              quantity: 1,
-              price: 500.0,
-              total: 1000,
+              name: 'Extra Queso Cheddar',
+              quantity: 2,
+              price: 1000.0,
+              total: 2000.0,
             ),
           ],
         ),
         TicketItem(
           quantity: 1,
-          description: 'Papas Fritas Grandes',
-          subtotal: 3500.0,
-          total: 3500.0,
+          description: 'Papas Rústicas Grandes',
+          subtotal: 4500.0,
+          total: 4500.0,
+          comment: 'Sin sal en las papas',
+          subselections: [
+            TicketSubselection(
+              name: 'Salsa Cheddar & Bacon',
+              quantity: 1,
+              price: 1000.0,
+              total: 1000.0,
+            ),
+          ],
+        ),
+        TicketItem(
+          quantity: 2,
+          description: 'Cerveza IPA 500ml',
+          subtotal: 4000.0,
+          total: 4000.0,
+          comment: 'Servir en vaso de chopp helado',
         ),
       ],
     );

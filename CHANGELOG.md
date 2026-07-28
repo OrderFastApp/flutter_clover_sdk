@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3
+
+### templates
+- added new templates to printings
+
+
 ## 0.8.10
 
 ### printer / model

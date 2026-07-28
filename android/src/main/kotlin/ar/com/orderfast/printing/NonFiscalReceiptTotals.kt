@@ -1,7 +1,7 @@
 package ar.com.orderfast.printing
 
-import ar.com.orderfast.models.NonFiscalTicket
-import ar.com.orderfast.models.TicketItem
+import ar.com.orderfast.models.ticket.NonFiscalTicket
+import ar.com.orderfast.models.ticket.TicketItem
 
 /**
  * Totales del pie del ticket no fiscal (Subtotal / Descuento / Total).

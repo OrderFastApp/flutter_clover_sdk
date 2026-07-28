@@ -399,7 +399,6 @@ class CloverSdkPlugin {
   Future<PrintTicketResponse> printTicket({
     dynamic nonFiscalTicket,
     dynamic fiscalTicket,
-    bool textTicket = false,
   }) async {
     try {
       if (nonFiscalTicket == null && fiscalTicket == null) {
@@ -420,8 +419,24 @@ class CloverSdkPlugin {
             fiscalTicket is FiscalTicket ? fiscalTicket.toMap() : fiscalTicket;
       }
 
-      final result = await _channel.invokeMethod(
-          textTicket ? 'printTextTicket' : 'printTicket', arguments);
+      final result = await _channel.invokeMethod('printTicket', arguments);
+      return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
+    } catch (e) {
+      return PrintTicketResponse(
+        success: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  /// Imprime una Comanda de Cocina (Alta Visibilidad con Badge Invertido) usando [KitchenTicketDto].
+  Future<PrintTicketResponse> printKitchenTicket(
+    KitchenTicketDto kitchenTicket,
+  ) async {
+    try {
+      final result = await _channel.invokeMethod('printKitchenTicket', {
+        'kitchenTicket': kitchenTicket.toMap(),
+      });
       return PrintTicketResponse.fromMap(Map<String, dynamic>.from(result));
     } catch (e) {
       return PrintTicketResponse(
@@ -509,7 +524,6 @@ class CloverSdkPlugin {
     String? dateTime,
     bool? isTakeAway,
     String? identifier,
-    bool textTicket = false,
   }) async {
     try {
       final ticketOrder = TicketOrder.fromJson(order);
@@ -520,10 +534,7 @@ class CloverSdkPlugin {
         isTakeAway: isTakeAway,
         identifier: identifier,
       );
-      return await printTicket(
-        nonFiscalTicket: nonFiscal,
-        textTicket: textTicket,
-      );
+      return await printTicket(nonFiscalTicket: nonFiscal);
     } catch (e) {
       return PrintTicketResponse(
         success: false,
@@ -533,99 +544,124 @@ class CloverSdkPlugin {
   }
 
   /// Imprime un ticket no fiscal de prueba con datos mockeados
-  ///
-  /// Esta función crea un ticket no fiscal de ejemplo basado en los datos
-  /// de las imágenes proporcionadas para pruebas.
-  ///
-  /// Ejemplo de uso:
-  /// ```dart
-  /// final result = await cloverSdk.printTestNonFiscalTicket();
-  /// if (result.success) {
-  ///   print('Ticket impreso correctamente');
-  /// } else {
-  ///   print('Error: ${result.error}');
-  /// }
-  /// ```
-  Future<PrintTicketResponse> printTestNonFiscalTicket(
-      {bool textTicket = false}) async {
+  Future<PrintTicketResponse> printTestNonFiscalTicket() async {
     final now = DateTime.now();
     final timestamp = _formatDateTime(now);
 
     final testTicket = NonFiscalTicket(
-      orderNumber: 'A73',
+      orderNumber: 'A-73',
+      storeName: 'OrderFast Obelisco',
+      dateTime: timestamp,
+      isTakeAway: true,
+      identifier: 'Mesa 4',
+      discountCode: 'PROMO20',
+      discountPercent: 20.0,
+      discountAmount: 4300.0,
+      subtotalBeforeDiscount: 21500.0,
+      discountAppliedAmount: 4300.0,
+      total: 17200.0,
       items: [
         TicketItem(
+          quantity: 2,
+          description: 'Hamburguesa Quimera Doble',
+          subtotal: 12000.0,
+          total: 12000.0,
+          subselections: [
+            TicketSubselection(
+                name: 'Extra Queso Cheddar',
+                quantity: 2,
+                price: 1000.0,
+                total: 2000.0),
+            TicketSubselection(
+                name: 'Sin Cebolla', quantity: 1, price: 0.0, total: 0.0),
+          ],
+        ),
+        TicketItem(
           quantity: 1,
-          description: 'Quimera y Haru',
-          subtotal: 123.0,
-          total: 123.0,
+          description: 'Papas Rústicas Grandes',
+          subtotal: 4500.0,
+          total: 4500.0,
+          subselections: [
+            TicketSubselection(
+                name: 'Salsa Cheddar & Bacon',
+                quantity: 1,
+                price: 1000.0,
+                total: 1000.0),
+          ],
+        ),
+        TicketItem(
+          quantity: 2,
+          description: 'Gaseosa Coca-Cola 500ml',
+          subtotal: 3000.0,
+          total: 3000.0,
+        ),
+        TicketItem(
+          quantity: 1,
+          description: 'Postre Flan Casero c/ Dulce de Leche',
+          subtotal: 2000.0,
+          total: 2000.0,
         ),
       ],
-      total: 123.0,
-      dateTime: timestamp,
-      isTakeAway: null, // Puedes cambiar a true o false para probar
-      identifier: null, // Puedes agregar un identificador para probar
     );
 
-    return await printTicket(
-        nonFiscalTicket: testTicket, textTicket: textTicket);
+    return await printTicket(nonFiscalTicket: testTicket);
   }
 
-  /// Imprime un ticket fiscal de prueba con datos mockeados
-  ///
-  /// Esta función crea un ticket fiscal de ejemplo basado en los datos
-  /// de las imágenes proporcionadas para pruebas.
-  ///
-  /// Ejemplo de uso:
-  /// ```dart
-  /// final result = await cloverSdk.printTestFiscalTicket();
-  /// if (result.success) {
-  ///   print('Ticket fiscal impreso correctamente');
-  /// } else {
-  ///   print('Error: ${result.error}');
-  /// }
-  /// ```
-  Future<PrintTicketResponse> printTestFiscalTicket(
-      {bool textTicket = false}) async {
+  /// Imprime un ticket fiscal de prueba con datos mockeados completos
+  Future<PrintTicketResponse> printTestFiscalTicket() async {
     final now = DateTime.now();
     final fecha = _formatDate(now);
     final timestamp = _formatDateTime(now);
 
     final testTicket = FiscalTicket(
+      orderNumber: 'FAC-0002-00000344',
+      tipoComprobante: 'Factura B',
+      dateTime: timestamp,
+      total: 17200.0,
       items: [
         TicketItem(
+          quantity: 2,
+          description: 'Hamburguesa Quimera Doble',
+          subtotal: 12000.0,
+          total: 12000.0,
+        ),
+        TicketItem(
           quantity: 1,
-          description: 'Quimera y Haru',
-          subtotal: 123.0,
-          total: 123.0,
+          description: 'Papas Rústicas Grandes',
+          subtotal: 4500.0,
+          total: 4500.0,
+        ),
+        TicketItem(
+          quantity: 1,
+          description: 'Gaseosa Coca-Cola 500ml',
+          subtotal: 1500.0,
+          total: 1500.0,
         ),
       ],
-      total: 123.0,
-      dateTime: timestamp,
-      tipoComprobante: 'Recibo C',
       fiscalInfo: FiscalInfo(
-        razonSocial: 'OrderFasts',
-        cuit: '20326381285',
-        direccion: 'sarmiento 1525',
-        localidad: 'San Miguel',
-        numeroInscripcionIIBB: '20326381285',
-        responsable: 'Monotributo',
-        inicioActividades: '6/2025',
+        razonSocial: 'OrderFast S.A.',
+        cuit: '30716892341',
+        direccion: 'Av. Corrientes 1234, Piso 4',
+        localidad: 'Ciudad Autónoma de Buenos Aires',
+        numeroInscripcionIIBB: '30716892341',
+        responsable: 'IVA Responsable Inscripto',
+        inicioActividades: '01/2024',
         fecha: fecha,
         numeroT: '00000000344',
         puntoVenta: '0002',
         consumidorFinal: true,
         regimenFiscal:
             'Regimen de Transparencia Fiscal al Consumidor Ley 27.743',
-        ivaContenido: 21.35,
+        ivaContenido: 2985.12,
         otrosImpuestosNacionales: 0.0,
-        cae: '86030164034844',
-        fechaVencimiento: '26/01/2026',
-        qrCodeData: 'https://www.sb.orderfast.com/afip?orderId=123',
+        cae: '74291823948123',
+        fechaVencimiento: '15/08/2026',
+        qrCodeData:
+            'https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyNi0wNy0yOCIsImN1aXQiOjMwNzE2ODkyMzQxLCJwdG9WdGEiOjIsInRpcG9DTVAiOjYsIm5ybUNtcCI6MzQ0LCJpbXBvcnRlIjoxNzIwMCwibW9uZWRhIjoiQVJTIiwiY3R6IjoxLCJ0aXBvRG9jUmVjIjo5NiwibnJvRG9jUmVjIjowLCJ0aXBvQ29kQXV0IjoiQ0FFIiwiY29kQXV0Ijo3NDI5MTgyMzk0ODEyM30=',
       ),
     );
 
-    return await printTicket(fiscalTicket: testTicket, textTicket: textTicket);
+    return await printTicket(fiscalTicket: testTicket);
   }
 
   /// Formatea una fecha como dd/MM/yyyy

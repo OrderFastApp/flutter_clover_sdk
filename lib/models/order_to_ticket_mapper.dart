@@ -89,6 +89,7 @@ NonFiscalTicket orderToNonFiscalTicket(
     items: items,
     total: order.total,
     dateTime: dt,
+    storeName: order.storeName,
     isTakeAway: isTakeAway,
     identifier: identifier,
     discountCode: discountCode,

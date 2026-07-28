@@ -53,6 +53,7 @@ data class NonFiscalTicket(
     val items: List<TicketItem>,
     val total: Double,
     val dateTime: String,
+    val storeName: String? = null,
     val isTakeAway: Boolean? = null,
     val identifier: String? = null,
     val disclaimer: String? = "COMPROBANTE NO FISCAL, NO VALIDO COMO FACTURA.",

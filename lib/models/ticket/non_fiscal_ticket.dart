@@ -15,6 +15,9 @@ class NonFiscalTicket {
   /// Fecha y hora de la transacción
   final String dateTime;
 
+  /// Nombre de la tienda / comercio (opcional). Se muestra arriba del número de orden.
+  final String? storeName;
+
   /// Si es para llevar (true) o para comer aquí (false). Null si no aplica
   final bool? isTakeAway;
 
@@ -47,6 +50,7 @@ class NonFiscalTicket {
     required this.items,
     required this.total,
     required this.dateTime,
+    this.storeName,
     this.isTakeAway,
     this.identifier,
     this.disclaimer,
@@ -65,6 +69,7 @@ class NonFiscalTicket {
       'items': items.map((item) => item.toMap()).toList(),
       'total': total,
       'dateTime': dateTime,
+      if (storeName != null && storeName!.trim().isNotEmpty) 'storeName': storeName!.trim(),
       if (isTakeAway != null) 'isTakeAway': isTakeAway,
       if (identifier != null && identifier!.isNotEmpty) 'identifier': identifier,
       if (disclaimer != null) 'disclaimer': disclaimer,
@@ -77,8 +82,10 @@ class NonFiscalTicket {
     };
   }
 
-  /// Crea un NonFiscalTicket desde un Map
+  /// Crea un NonFiscalTicket desde un Map con parseo flexible de storeName
   factory NonFiscalTicket.fromMap(Map<String, dynamic> map) {
+    final rawStoreName = _parseStoreName(map);
+
     return NonFiscalTicket(
       orderNumber: map['orderNumber'] as String? ?? '',
       items: (map['items'] as List<dynamic>?)
@@ -87,6 +94,7 @@ class NonFiscalTicket {
           [],
       total: (map['total'] as num?)?.toDouble() ?? 0.0,
       dateTime: map['dateTime'] as String? ?? '',
+      storeName: rawStoreName,
       isTakeAway: map['isTakeAway'] as bool?,
       identifier: map['identifier'] as String?,
       disclaimer: map['disclaimer'] as String?,
@@ -97,5 +105,19 @@ class NonFiscalTicket {
       discountAppliedAmount: (map['discountAppliedAmount'] as num?)?.toDouble(),
       paperProfile: PaperProfileExtension.fromString(map['paperProfile'] as String?),
     );
+  }
+
+  static String? _parseStoreName(Map<String, dynamic> map) {
+    if (map['storeName'] != null) return map['storeName'].toString();
+    if (map['store_name'] != null) return map['store_name'].toString();
+    if (map['store'] != null) {
+      final store = map['store'];
+      if (store is Map && store['name'] != null) return store['name'].toString();
+      if (store is String && store.isNotEmpty) return store;
+    }
+    if (map['name'] != null) return map['name'].toString();
+    if (map['slug'] != null) return map['slug'].toString();
+    if (map['store_slug'] != null) return map['store_slug'].toString();
+    return null;
   }
 }

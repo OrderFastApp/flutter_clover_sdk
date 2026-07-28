@@ -169,6 +169,7 @@ class TicketOrder {
   final dynamic orderPayment;
   final dynamic location;
   final dynamic totem;
+  final String? storeName;
 
   TicketOrder({
     this.locationId,
@@ -188,6 +189,7 @@ class TicketOrder {
     this.orderPayment,
     this.location,
     this.totem,
+    this.storeName,
   });
 
   factory TicketOrder.fromJson(Map<String, dynamic> json) {
@@ -203,6 +205,27 @@ class TicketOrder {
       }
     }
     final rawDiscounts = json['order_discounts'];
+
+    String? extractedStoreName;
+    if (json['storeName'] != null) {
+      extractedStoreName = json['storeName'].toString();
+    } else if (json['store_name'] != null) {
+      extractedStoreName = json['store_name'].toString();
+    } else if (json['store'] != null) {
+      final store = json['store'];
+      if (store is Map && store['name'] != null) {
+        extractedStoreName = store['name'].toString();
+      } else if (store is String && store.isNotEmpty) {
+        extractedStoreName = store;
+      }
+    } else if (json['name'] != null) {
+      extractedStoreName = json['name'].toString();
+    } else if (json['slug'] != null) {
+      extractedStoreName = json['slug'].toString();
+    } else if (json['store_slug'] != null) {
+      extractedStoreName = json['store_slug'].toString();
+    }
+
     return TicketOrder(
       locationId: json['location_id'] as String?,
       totemId: json['totem_id'] as String?,
@@ -227,6 +250,7 @@ class TicketOrder {
       orderPayment: json['order_payment'],
       location: json['location'],
       totem: json['totem'],
+      storeName: extractedStoreName,
     );
   }
 }

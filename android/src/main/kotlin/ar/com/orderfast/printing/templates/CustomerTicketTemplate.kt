@@ -22,7 +22,15 @@ class CustomerTicketTemplate(private val context: Context) {
 
         // Encabezado
         layout.addView(styles.createHr("=", styles.lineCharCount))
-        layout.addView(styles.createTextView("ORDEN #${ticket.orderNumber}", bold = true, large = true, gravityVal = Gravity.CENTER))
+
+        // Nombre de la Tienda (arriba, solo si existe)
+        val nameToDisplay = ticket.storeName?.trim()
+        if (!nameToDisplay.isNullOrEmpty()) {
+            layout.addView(styles.createTextView(nameToDisplay.uppercase(), bold = true, large = true, gravityVal = Gravity.CENTER))
+        }
+
+        // Número de Orden en Badge de Fondo Negro
+        layout.addView(styles.createInvertedBadge("ORDEN #${ticket.orderNumber}"))
         layout.addView(styles.createHr("-", styles.lineCharCount))
 
         // Identificador (ej. Mesa 4) / Take Away

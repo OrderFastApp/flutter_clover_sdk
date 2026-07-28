@@ -26,6 +26,8 @@ class _MyAppState extends State<MyApp> {
 
   static const Map<String, dynamic> _sampleOrderForPrint = {
     'id': 'order-demo-8912',
+    'slug': 'orderfast-obelisco',
+    'store_name': 'OrderFast Obelisco',
     'created_at': '2026-07-28T11:20:00.000Z',
     'total': 18500.0,
     'order_items': [
@@ -328,6 +330,98 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Widget _printCard({
+    required String title,
+    required String templateName,
+    required String description,
+    required String mode,
+    required VoidCallback onPressed,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.grey.shade50,
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: mode.contains('Gráfico')
+                        ? Colors.blue.shade100
+                        : (mode.contains('Imagen')
+                            ? Colors.purple.shade100
+                            : Colors.orange.shade100),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    mode,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: mode.contains('Gráfico')
+                          ? Colors.blue.shade900
+                          : (mode.contains('Imagen')
+                              ? Colors.purple.shade900
+                              : Colors.orange.shade900),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Plantilla Nativa: $templateName',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onPressed,
+                icon: const Icon(Icons.print, size: 18),
+                label: Text('Probar $title'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _section(String title, List<Widget> children) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -494,48 +588,81 @@ class _MyAppState extends State<MyApp> {
                         _cloverSdk.isScreensaverSupported())),
                 _btn('setScreensaverDreamComponent…', _dialogDreamComponent),
               ]),
-              _section('Impresión', [
-                _btn(
-                    'printTestNonFiscalTicket',
-                    () => _invokePrint('printTestNonFiscalTicket',
-                        _cloverSdk.printTestNonFiscalTicket())),
-                _btn(
-                    'printTestNonFiscalTicket (texto)',
-                    () => _invokePrint('printTestNonFiscalTicket texto',
-                        _cloverSdk.printTestNonFiscalTicket(textTicket: true))),
-                _btn(
-                    'printTestFiscalTicket',
-                    () => _invokePrint('printTestFiscalTicket',
-                        _cloverSdk.printTestFiscalTicket())),
-                _btn(
-                    'printTestFiscalTicket (texto)',
-                    () => _invokePrint('printTestFiscalTicket texto',
-                        _cloverSdk.printTestFiscalTicket(textTicket: true))),
-                _btn('printCashTicket', _printCashTicketSample),
-                _btn('printKitchenTicket (Cocina DTO)',
-                    _printKitchenTicketSample),
-                _btn(
-                    'printOrderTicket (JSON orden)',
-                    () => _invokePrint(
-                          'printOrderTicket',
-                          _cloverSdk.printOrderTicket(
-                              order: _sampleOrderForPrint),
-                        )),
-                _btn(
-                    'printOrderTicket (texto)',
-                    () => _invokePrint(
-                          'printOrderTicket texto',
-                          _cloverSdk.printOrderTicket(
-                            order: _sampleOrderForPrint,
-                            textTicket: true,
-                          ),
-                        )),
-                _btn(
-                    'printImage (PNG 1×1)',
-                    () => _invokePrint(
-                          'printImage',
-                          _cloverSdk.printImage(imageBase64: _kTinyPngBase64),
-                        )),
+              _section('Pruebas de Impresión por Plantilla Nativa', [
+                _printCard(
+                  title: '🧾 1. Ticket de Cliente / Venta',
+                  templateName: 'CustomerTicketTemplate.kt',
+                  description:
+                      'Se entrega al cliente tras la compra. Incluye detalle de ítems, modificadores, subtotal, descuentos y total.',
+                  mode: 'Gráfico (ViewPrintJob)',
+                  onPressed: () => _invokePrint('printTestNonFiscalTicket',
+                      _cloverSdk.printTestNonFiscalTicket()),
+                ),
+                _printCard(
+                  title: '🍳 2. Comanda de Cocina (DTO)',
+                  templateName: 'KitchenTicketTemplate.kt',
+                  description:
+                      'Se envía a la cocina. Destaca el badge negro invertido con el turno/mesa, comentarios de preparación y notas.',
+                  mode: 'Gráfico (ViewPrintJob)',
+                  onPressed: _printKitchenTicketSample,
+                ),
+                _printCard(
+                  title: '🏛️ 3. Factura Fiscal AFIP',
+                  templateName: 'FiscalTicketTemplate.kt',
+                  description:
+                      'Comprobante legal impositivo. Incluye Razón Social, CUIT, Condición IVA, CAE, vencimiento y Código QR AFIP.',
+                  mode: 'Gráfico (ViewPrintJob)',
+                  onPressed: () => _invokePrint('printTestFiscalTicket',
+                      _cloverSdk.printTestFiscalTicket()),
+                ),
+                _printCard(
+                  title: '💵 4. Comprobante de Caja',
+                  templateName: 'CashTicketTemplate.kt',
+                  description:
+                      'Formato compacto utilizado para aperturas/cierres de turno o resúmenes simplificados de caja.',
+                  mode: 'Gráfico (ViewPrintJob)',
+                  onPressed: _printCashTicketSample,
+                ),
+                _printCard(
+                  title: '🔄 5. Conversión de Orden JSON',
+                  templateName: 'orderToNonFiscalTicket() -> CustomerTicketTemplate',
+                  description:
+                      'Toma una estructura JSON de pedido de la API de OrderFast y la convierte automáticamente a un ticket imprimible.',
+                  mode: 'Gráfico (ViewPrintJob)',
+                  onPressed: () => _invokePrint(
+                    'printOrderTicket',
+                    _cloverSdk.printOrderTicket(order: _sampleOrderForPrint),
+                  ),
+                ),
+                _printCard(
+                  title: '🔤 6. Ticket Cliente (Texto Plano ASCII)',
+                  templateName: 'N/A (Motor TextPrintJob de Clover)',
+                  description:
+                      'Modo alternativo/legacy sin diseño gráfico. Imprime solo caracteres de texto plano ASCII en monospaciado puro.',
+                  mode: 'Texto Plano (TextPrintJob)',
+                  onPressed: () => _invokePrint('printTestNonFiscalTicket texto',
+                      _cloverSdk.printTestNonFiscalTicket(textTicket: true)),
+                ),
+                _printCard(
+                  title: '🔤 7. Ticket Fiscal (Texto Plano ASCII)',
+                  templateName: 'N/A (Motor TextPrintJob de Clover)',
+                  description:
+                      'Modo alternativo de texto plano para comprobantes fiscales (sin gráficos ni código QR).',
+                  mode: 'Texto Plano (TextPrintJob)',
+                  onPressed: () => _invokePrint('printTestFiscalTicket texto',
+                      _cloverSdk.printTestFiscalTicket(textTicket: true)),
+                ),
+                _printCard(
+                  title: '🖼️ 8. Impresión de Imagen PNG',
+                  templateName: 'N/A (Motor ImagePrintJob2 de Clover)',
+                  description:
+                      'Imprime directamente gráficos, marcas de agua o imágenes codificadas en base64.',
+                  mode: 'Imagen Bitmap',
+                  onPressed: () => _invokePrint(
+                    'printImage',
+                    _cloverSdk.printImage(imageBase64: _kTinyPngBase64),
+                  ),
+                ),
               ]),
               _section('SDK', [
                 _btn(

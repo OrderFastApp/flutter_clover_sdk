@@ -777,11 +777,20 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             )
         }
 
+        val rawStoreName = (data["storeName"] as? String)
+            ?: (data["store_name"] as? String)
+            ?: ((data["store"] as? Map<*, *>)?.get("name") as? String)
+            ?: (data["store"] as? String)
+            ?: (data["name"] as? String)
+            ?: (data["slug"] as? String)
+            ?: (data["store_slug"] as? String)
+
         return NonFiscalTicket(
             orderNumber = orderNumber,
             items = items,
             total = total,
             dateTime = dateTime,
+            storeName = rawStoreName?.trim()?.ifEmpty { null },
             isTakeAway = isTakeAway,
             identifier = identifier,
             disclaimer = disclaimer,

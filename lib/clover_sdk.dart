@@ -570,6 +570,7 @@ class CloverSdkPlugin {
 
     final testTicket = NonFiscalTicket(
       orderNumber: 'A-73',
+      storeName: 'OrderFast Obelisco',
       dateTime: timestamp,
       isTakeAway: true,
       identifier: 'Mesa 4',
@@ -586,8 +587,13 @@ class CloverSdkPlugin {
           subtotal: 12000.0,
           total: 12000.0,
           subselections: [
-            TicketSubselection(name: 'Extra Queso Cheddar', quantity: 2, price: 1000.0, total: 2000.0),
-            TicketSubselection(name: 'Sin Cebolla', quantity: 1, price: 0.0, total: 0.0),
+            TicketSubselection(
+                name: 'Extra Queso Cheddar',
+                quantity: 2,
+                price: 1000.0,
+                total: 2000.0),
+            TicketSubselection(
+                name: 'Sin Cebolla', quantity: 1, price: 0.0, total: 0.0),
           ],
         ),
         TicketItem(
@@ -596,7 +602,11 @@ class CloverSdkPlugin {
           subtotal: 4500.0,
           total: 4500.0,
           subselections: [
-            TicketSubselection(name: 'Salsa Cheddar & Bacon', quantity: 1, price: 1000.0, total: 1000.0),
+            TicketSubselection(
+                name: 'Salsa Cheddar & Bacon',
+                quantity: 1,
+                price: 1000.0,
+                total: 1000.0),
           ],
         ),
         TicketItem(
@@ -668,7 +678,8 @@ class CloverSdkPlugin {
         otrosImpuestosNacionales: 0.0,
         cae: '74291823948123',
         fechaVencimiento: '15/08/2026',
-        qrCodeData: 'https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyNi0wNy0yOCIsImN1aXQiOjMwNzE2ODkyMzQxLCJwdG9WdGEiOjIsInRpcG9DTVAiOjYsIm5ybUNtcCI6MzQ0LCJpbXBvcnRlIjoxNzIwMCwibW9uZWRhIjoiQVJTIiwiY3R6IjoxLCJ0aXBvRG9jUmVjIjo5NiwibnJvRG9jUmVjIjowLCJ0aXBvQ29kQXV0IjoiQ0FFIiwiY29kQXV0Ijo3NDI5MTgyMzk0ODEyM30=',
+        qrCodeData:
+            'https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyNi0wNy0yOCIsImN1aXQiOjMwNzE2ODkyMzQxLCJwdG9WdGEiOjIsInRpcG9DTVAiOjYsIm5ybUNtcCI6MzQ0LCJpbXBvcnRlIjoxNzIwMCwibW9uZWRhIjoiQVJTIiwiY3R6IjoxLCJ0aXBvRG9jUmVjIjo5NiwibnJvRG9jUmVjIjowLCJ0aXBvQ29kQXV0IjoiQ0FFIiwiY29kQXV0Ijo3NDI5MTgyMzk0ODEyM30=',
       ),
     );
 

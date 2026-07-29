@@ -53,7 +53,7 @@ class PrintTicketStyles(
 
     val columns: Columns
         get() = if (is55mm) {
-            Columns(qty = 3, desc = 15, subtotal = 7, total = 7)
+            Columns(qty = 3, desc = 19, subtotal = 0, total = 10)
         } else {
             Columns(qty = 4, desc = 22, subtotal = 9, total = 9)
         }
@@ -75,6 +75,7 @@ class PrintTicketStyles(
     }
 
     fun fixedCell(value: String, width: Int, alignEnd: Boolean = false): String {
+        if (width <= 0) return ""
         val clean = value.replace("\n", " ").trim()
         val truncated = if (clean.length > width) {
             clean.take((width - 1).coerceAtLeast(1)) + "…"

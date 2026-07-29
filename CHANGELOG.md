@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4
+
+### templates
+- removed columns in tickets
+
+
 ## 0.9.3
 
 ### templates

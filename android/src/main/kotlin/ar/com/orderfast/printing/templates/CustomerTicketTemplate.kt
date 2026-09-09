@@ -39,7 +39,7 @@ class CustomerTicketTemplate(private val context: Context) {
             layout.addView(styles.createTextView("Ubicación: ${ticket.identifier}", bold = true))
         }
         if (ticket.isTakeAway != null) {
-            val modeText = if (ticket.isTakeAway) "PARA LLEVAR / DESTAPADO" else "PARA COMER AQUI"
+            val modeText = if (ticket.isTakeAway) "PARA LLEVAR" else "PARA COMER AQUI"
             layout.addView(styles.createTextView(modeText, bold = true, gravityVal = Gravity.CENTER))
         }
 

@@ -313,6 +313,20 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Muestra la pantalla de bienvenida de Clover en la pantalla cliente
+  ///
+  /// En el Clover Kiosk la pantalla cliente se apaga a los 10 min de inactividad
+  /// (timeout propio de Clover, no configurable). Cada llamada reinicia ese timeout,
+  /// pero muestra un instante la bienvenida de Clover sobre la pantalla cliente.
+  Future<Map<String, dynamic>> showWelcomeScreen() async {
+    try {
+      final result = await _channel.invokeMethod('showWelcomeScreen');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Imprime un ticket (fiscal o no fiscal)
   ///
   /// [nonFiscalTicket] - Datos del ticket no fiscal (opcional). Puede ser un objeto [NonFiscalTicket] o un Map.

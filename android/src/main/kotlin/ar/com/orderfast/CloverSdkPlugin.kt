@@ -16,6 +16,7 @@ import ar.com.orderfast.models.ticket.PrintTicketResponse
 import ar.com.orderfast.models.ticket.KitchenTicketDto
 import ar.com.orderfast.models.ticket.PaperProfile
 import ar.com.orderfast.services.PaymentService
+import ar.com.orderfast.services.DisplayService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
 import ar.com.orderfast.services.QrPaymentService
@@ -50,6 +51,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var immersiveModeService: ImmersiveModeService? = null
     private var screensaverService: ScreensaverService? = null
     private var printService: PrintService? = null
+    private var displayService: DisplayService? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
@@ -84,6 +86,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 "printKitchenTicket" -> printKitchenTicket(call, result)
                 "printCashTicket" -> printCashTicket(call, result)
                 "printImage" -> printImage(call, result)
+                "showWelcomeScreen" -> showWelcomeScreen(result)
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
@@ -129,6 +132,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
             // Inicializar el servicio de impresión
             printService = PrintService(context)
+
+            // Inicializar el servicio de pantalla cliente (conecta recién al primer uso)
+            displayService = DisplayService(context)
 
             logCloverDeviceModel()
 
@@ -582,6 +588,25 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
+    private fun showWelcomeScreen(result: MethodChannel.Result) {
+        try {
+            val displayService = this.displayService ?: run {
+                result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+                return
+            }
+
+            displayService.showWelcomeScreen()
+
+            result.success(mapOf(
+                "success" to true,
+                "message" to "Pantalla de bienvenida enviada"
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error al mostrar pantalla de bienvenida", e)
+            result.error("DISPLAY_ERROR", e.message, null)
+        }
+    }
+
 
 
     private fun printImage(call: MethodCall, result: MethodChannel.Result) {
@@ -909,6 +934,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         immersiveModeService?.dispose()
         immersiveModeService = null
         screensaverService = null
+        displayService?.dispose()
+        displayService = null
         activity = null
         channel.setMethodCallHandler(null)
         Log.d(TAG, "Plugin detached from engine")

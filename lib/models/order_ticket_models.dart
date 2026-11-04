@@ -1,7 +1,7 @@
-/// Modelos que representan el JSON de una orden para imprimir tickets.
-/// Compatibles con la estructura de la API (order_items, order_sub_selection, order_discounts).
+// Modelos que representan el JSON de una orden para imprimir tickets.
+// Compatibles con la estructura de la API (order_items, order_sub_selection, order_discounts).
 
-/// Objeto interno que define la subselección elegida (el que importa para el ticket).
+// Objeto interno que define la subselección elegida (el que importa para el ticket).
 class OrderSubSelectionData {
   final String? productId;
   final String? subselectionId;

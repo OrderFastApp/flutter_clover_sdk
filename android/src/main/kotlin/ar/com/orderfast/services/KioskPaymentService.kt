@@ -61,8 +61,18 @@ class KioskPaymentService(private val context: Context) {
                 // Total fijo: sin pagos parciales (default de Clover: true).
                 .allowPartialPayments(false)
                 .tipOptions(TipOptions.Disable())
-                // El ticket lo imprime OrderFast, no Clover.
-                .receiptOptions(ReceiptOptions.SkipReceiptSelection())
+                // El ticket lo imprime OrderFast, no Clover. Se usa Instance(false, ...)
+                // y no SkipReceiptSelection(): ese deja cloverShouldHandleReceipts=true
+                // (EXTRA_REMOTE_RECEIPTS=false) y Clover imprime su recibo igual.
+                .receiptOptions(
+                    ReceiptOptions.Instance(
+                        false,
+                        ReceiptOptions.SmsReceiptOption.Disable(),
+                        ReceiptOptions.EmailReceiptOption.Disable(),
+                        ReceiptOptions.PrintReceiptOption.Disable(),
+                        ReceiptOptions.NoReceiptOption.Disable()
+                    )
+                )
                 .signatureOptions(SignatureOptions.Disable())
                 .offlineOptions(OfflineOptions.Instance(false, false, false))
                 .build(activity)

@@ -82,6 +82,39 @@ class CloverSdkPlugin {
     }
   }
 
+  /// Indica si este equipo soporta el cobro Kiosk (`KioskPayRequestIntentBuilder`).
+  ///
+  /// Es `true` solo en firmware Clover Kiosk. Ante cualquier error devuelve
+  /// `false` para que el llamador use [sale].
+  Future<bool> isKioskPayAvailable() async {
+    try {
+      final result = await _channel.invokeMethod('isKioskPayAvailable');
+      return Map<String, dynamic>.from(result)['available'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Procesa un pago en Clover Kiosk con `KioskPayRequestIntentBuilder`.
+  ///
+  /// Mismos parámetros y contrato que [sale]: el resultado real llega por
+  /// [onSaleResponse] (también ante cancelación o error de lanzamiento).
+  /// Sin pagos parciales, sin propina y sin recibo de Clover.
+  Future<Map<String, dynamic>> kioskSale({
+    required int amount,
+    required String externalId,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod('kioskSale', {
+        'amount': amount,
+        'externalId': externalId,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Desconecta y libera recursos del SDK
   Future<Map<String, dynamic>> dispose() async {
     try {

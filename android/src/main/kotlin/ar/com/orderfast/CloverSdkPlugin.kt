@@ -20,6 +20,7 @@ import ar.com.orderfast.services.DisplayService
 import ar.com.orderfast.services.KioskService
 import ar.com.orderfast.services.ImmersiveModeService
 import ar.com.orderfast.services.QrPaymentService
+import ar.com.orderfast.services.KioskPaymentService
 import ar.com.orderfast.services.ScreensaverService
 import ar.com.orderfast.services.PrintService
 import android.content.ComponentName
@@ -30,12 +31,14 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.PluginRegistry
 
 /**
  * Plugin principal de Flutter para Clover SDK
  * Maneja la comunicación entre Flutter y el SDK nativo de Clover
  */
-class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
+class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
+    PluginRegistry.ActivityResultListener {
 
     companion object {
         private const val TAG = "CloverSdkPlugin"
@@ -47,6 +50,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private var activity: Activity? = null
     private var paymentService: PaymentService? = null
     private var qrPaymentService: QrPaymentService? = null
+    private var kioskPaymentService: KioskPaymentService? = null
+    private var activityBinding: ActivityPluginBinding? = null
     private var kioskService: KioskService? = null
     private var immersiveModeService: ImmersiveModeService? = null
     private var screensaverService: ScreensaverService? = null
@@ -67,6 +72,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             when (call.method) {
                 "initialize" -> initialize(call, result)
                 "sale" -> sale(call, result)
+                "kioskSale" -> kioskSale(call, result)
+                "isKioskPayAvailable" -> isKioskPayAvailable(result)
                 "dispose" -> dispose(result)
                 "keepScreenOn" -> keepScreenOn(call, result)
                 "releaseScreenOn" -> releaseScreenOn(result)
@@ -127,6 +134,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             // Inicializar el servicio de pagos QR
             qrPaymentService = QrPaymentService(context)
 
+            // Servicio de cobro Kiosk (intent builder)
+            kioskPaymentService = KioskPaymentService(context)
+
             // Inicializar el servicio de screensaver
             screensaverService = ScreensaverService(context)
 
@@ -149,6 +159,50 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             result.error("INIT_ERROR", e.message, null)
         }
     }
+
+    private fun isKioskPayAvailable(result: MethodChannel.Result) {
+        val service = kioskPaymentService ?: KioskPaymentService(context)
+        result.success(mapOf("available" to service.isAvailable()))
+    }
+
+    /**
+     * Cobro en Clover Kiosk con KioskPayRequestIntentBuilder. La respuesta se
+     * emite por el mismo callback `onSaleResponse` que usa `sale`.
+     */
+    private fun kioskSale(call: MethodCall, result: MethodChannel.Result) {
+        val amount = call.argument<Int>("amount")?.toLong() ?: run {
+            result.error("MISSING_AMOUNT", "El amount es requerido", null)
+            return
+        }
+        val externalId = call.argument<String>("externalId") ?: run {
+            result.error("MISSING_EXTERNAL_ID", "El externalId es requerido", null)
+            return
+        }
+        val service = kioskPaymentService ?: run {
+            result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
+            return
+        }
+        val currentActivity = activity ?: run {
+            result.error("NO_ACTIVITY", "No hay Activity para lanzar el cobro Kiosk", null)
+            return
+        }
+        if (!service.isAvailable()) {
+            result.error("KIOSK_PAY_UNAVAILABLE", "Este equipo no soporta el cobro Kiosk", null)
+            return
+        }
+
+        // Se responde el ack antes de lanzar: el resultado real llega por
+        // onSaleResponse (puede ser inmediato si falla el lanzamiento).
+        result.success(mapOf("success" to true, "message" to "Solicitud de pago Kiosk enviada"))
+
+        service.pay(currentActivity, PaymentRequest(amount = amount, externalId = externalId)) { response ->
+            val responseMap = ar.com.orderfast.mappers.PaymentMapper.toMap(response)
+            channel.invokeMethod("onSaleResponse", responseMap)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?): Boolean =
+        kioskPaymentService?.handleActivityResult(requestCode, resultCode, data) ?: false
 
     private fun logCloverDeviceModel() {
         try {
@@ -202,6 +256,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         try {
             paymentService?.dispose()
             paymentService = null
+            kioskPaymentService?.dispose()
             result.success(mapOf(
                 "success" to true,
                 "message" to "SDK desconectado correctamente"
@@ -902,24 +957,39 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         )
     }
 
+    private fun bindActivityResults(binding: ActivityPluginBinding) {
+        activityBinding?.removeActivityResultListener(this)
+        activityBinding = binding
+        binding.addActivityResultListener(this)
+    }
+
+    private fun unbindActivityResults() {
+        activityBinding?.removeActivityResultListener(this)
+        activityBinding = null
+    }
+
     // ActivityAware methods
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        bindActivityResults(binding)
         Log.d(TAG, "Activity attached")
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
         activity = null
+        unbindActivityResults()
         Log.d(TAG, "Activity detached for config changes")
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        bindActivityResults(binding)
         Log.d(TAG, "Activity reattached for config changes")
     }
 
     override fun onDetachedFromActivity() {
         activity = null
+        unbindActivityResults()
         Log.d(TAG, "Activity detached")
     }
 
@@ -929,6 +999,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         paymentService?.dispose()
         paymentService = null
         qrPaymentService = null
+        kioskPaymentService?.dispose()
+        kioskPaymentService = null
         kioskService?.dispose()
         kioskService = null
         immersiveModeService?.dispose()

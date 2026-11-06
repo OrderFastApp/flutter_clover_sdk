@@ -43,6 +43,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     companion object {
         private const val TAG = "CloverSdkPlugin"
         private const val CHANNEL_NAME = "clover_sdk"
+        private const val KIOSK_CFD_RESET_DELAY_MS = 500L
     }
 
     private lateinit var channel: MethodChannel
@@ -52,6 +53,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var qrPaymentService: QrPaymentService? = null
     private var kioskPaymentService: KioskPaymentService? = null
     private var activityBinding: ActivityPluginBinding? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var kioskService: KioskService? = null
     private var immersiveModeService: ImmersiveModeService? = null
     private var screensaverService: ScreensaverService? = null
@@ -198,7 +200,27 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         service.pay(currentActivity, PaymentRequest(amount = amount, externalId = externalId)) { response ->
             val responseMap = ar.com.orderfast.mappers.PaymentMapper.toMap(response)
             channel.invokeMethod("onSaleResponse", responseMap)
+            resetCustomerDisplayAfterKioskPay(response.reason)
         }
+    }
+
+    /**
+     * Tras un cobro Kiosk la pantalla cliente de Clover (`remote.terminal.kiosk`)
+     * puede quedar `BUSY` con la actividad custom del cobro anterior. El cobro
+     * siguiente entonces falla a los ~12 s ("Max CFD device reset attempts
+     * exceeded" → "Error processing payment"). Mandarle la pantalla de
+     * bienvenida la devuelve a IDLE. No aplica si el cobro ni llegó a lanzarse.
+     */
+    private fun resetCustomerDisplayAfterKioskPay(reason: String?) {
+        if (reason == "AUTH_FAILED" || reason == "BUSY" || reason == "EXCEPTION") return
+        mainHandler.postDelayed({
+            try {
+                displayService?.showWelcomeScreen()
+                Log.i(TAG, "🔄 CFD reset: showWelcomeScreen tras cobro Kiosk (reason=$reason)")
+            } catch (e: Exception) {
+                Log.w(TAG, "CFD reset tras cobro Kiosk falló (no crítico)", e)
+            }
+        }, KIOSK_CFD_RESET_DELAY_MS)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?): Boolean =

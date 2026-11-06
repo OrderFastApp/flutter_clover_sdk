@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.Parcelable
 import android.os.SystemClock
 import android.util.Log
+import com.clover.sdk.util.CloverAuth
 import com.clover.sdk.v1.Intents
 import ar.com.orderfast.mappers.PaymentMapper
 import ar.com.orderfast.models.PaymentRequest
@@ -22,6 +23,8 @@ import com.clover.sdk.v3.payments.api.KioskPayRequestIntentBuilder.OfflineOption
 import com.clover.sdk.v3.payments.api.KioskPayRequestIntentBuilder.ReceiptOptions
 import com.clover.sdk.v3.payments.api.KioskPayRequestIntentBuilder.SignatureOptions
 import com.clover.sdk.v3.payments.api.KioskPayRequestIntentBuilder.TipOptions
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Cobro con tarjeta en Clover Kiosk vía [KioskPayRequestIntentBuilder].
@@ -67,6 +70,65 @@ class KioskPaymentService(private val context: Context) {
             callback(failure("BUSY", "Ya hay un cobro Kiosk en curso"))
             return
         }
+
+        // Se reserva el cobro ya: la validación de auth corre fuera del hilo
+        // principal y un segundo cobro no debe colarse mientras tanto.
+        pendingCallback = callback
+        launchedAtMs = SystemClock.elapsedRealtime()
+        authExecutor.execute {
+            val authError = validateAuth()
+            handler.post {
+                if (pendingCallback == null) return@post // dispose() mientras tanto
+                if (authError != null) {
+                    pendingCallback = null
+                    Log.e(TAG, "⛔ auth de Clover inválida, no se lanza el cobro: $authError")
+                    callback(failure("AUTH_FAILED", authError))
+                } else {
+                    launch(activity, request, callback)
+                }
+            }
+        }
+    }
+
+    /**
+     * `KioskPayRequestIntentBuilder.build` pide el token con `CloverAuth` y
+     * traga cualquier fallo: si no hay credenciales el intent sale sin `appId`
+     * y Clover muestra "No clover app found for <paquete>". Se valida antes,
+     * en un hilo de fondo (puede hacer red), con un reintento forzando la
+     * validación contra la nube de Clover.
+     *
+     * @return null si hay credenciales; si no, el motivo.
+     */
+    private fun validateAuth(): String? {
+        var lastError = "Sin credenciales de Clover"
+        for (force in listOf(false, true)) {
+            try {
+                val auth = CloverAuth.authenticate(context, force, 20L, TimeUnit.SECONDS)
+                val hasAppId = !auth?.appId.isNullOrEmpty()
+                val hasToken = !auth?.authToken.isNullOrEmpty()
+                if (hasAppId && hasToken) {
+                    if (force) Log.i(TAG, "auth OK tras reintento con forceValidate")
+                    return null
+                }
+                lastError = auth?.errorMessage ?: lastError
+                Log.w(
+                    TAG,
+                    "auth inválida (forceValidate=$force) appId=$hasAppId token=$hasToken " +
+                        "error=${auth?.errorMessage} merchantId=${auth?.merchantId}"
+                )
+            } catch (e: Exception) {
+                lastError = e.message ?: e.javaClass.simpleName
+                Log.w(TAG, "auth falló (forceValidate=$force): ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+        return lastError
+    }
+
+    private fun launch(
+        activity: Activity,
+        request: PaymentRequest,
+        callback: (PaymentResponse) -> Unit
+    ) {
         try {
             val intent = KioskPayRequestIntentBuilder(request.amount, request.externalId)
                 // Total fijo: sin pagos parciales (default de Clover: true).
@@ -88,7 +150,6 @@ class KioskPaymentService(private val context: Context) {
                 .offlineOptions(OfflineOptions.Instance(false, false, false))
                 .build(activity)
 
-            pendingCallback = callback
             launchedAtMs = SystemClock.elapsedRealtime()
             Log.i(
                 TAG,
@@ -155,6 +216,7 @@ class KioskPaymentService(private val context: Context) {
     // --- Diagnóstico -------------------------------------------------------
 
     private var launchedAtMs = 0L
+    private val authExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private val probes = mutableListOf<Runnable>()
 

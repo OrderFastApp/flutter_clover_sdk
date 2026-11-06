@@ -71,33 +71,33 @@ class KioskPaymentService(private val context: Context) {
             return
         }
 
-        // Se reserva el cobro ya: la validación de auth corre fuera del hilo
+        // Se reserva el cobro ya: el chequeo de auth corre fuera del hilo
         // principal y un segundo cobro no debe colarse mientras tanto.
         pendingCallback = callback
         launchedAtMs = SystemClock.elapsedRealtime()
         authExecutor.execute {
+            // Solo diagnóstico, NO bloquea: sin token de app el handler de Clover
+            // apenas avisa ("No token found for <paquete>") y sigue el flujo (p. ej.
+            // en sandbox / apps instaladas por sideload). Además, esta llamada deja
+            // el token listo para el `CloverAuth` de `build()` (que corre en main).
             val authError = validateAuth()
+            if (authError != null) {
+                Log.w(TAG, "⚠️ auth de Clover sin credenciales, se lanza igual: $authError")
+            }
             handler.post {
                 if (pendingCallback == null) return@post // dispose() mientras tanto
-                if (authError != null) {
-                    pendingCallback = null
-                    Log.e(TAG, "⛔ auth de Clover inválida, no se lanza el cobro: $authError")
-                    callback(failure("AUTH_FAILED", authError))
-                } else {
-                    launch(activity, request, callback)
-                }
+                launch(activity, request, callback)
             }
         }
     }
 
     /**
      * `KioskPayRequestIntentBuilder.build` pide el token con `CloverAuth` y
-     * traga cualquier fallo: si no hay credenciales el intent sale sin `appId`
-     * y Clover muestra "No clover app found for <paquete>". Se valida antes,
-     * en un hilo de fondo (puede hacer red), con un reintento forzando la
-     * validación contra la nube de Clover.
+     * traga cualquier fallo: si no hay credenciales el intent sale sin `appId`.
+     * Se consulta antes, en un hilo de fondo (puede hacer red), con un reintento
+     * forzando la validación contra la nube de Clover.
      *
-     * @return null si hay credenciales; si no, el motivo.
+     * @return null si hay credenciales; si no, el motivo (solo para el log).
      */
     private fun validateAuth(): String? {
         var lastError = "Sin credenciales de Clover"

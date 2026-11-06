@@ -151,6 +151,7 @@ class KioskPaymentService(private val context: Context) {
                 .build(activity)
 
             launchedAtMs = SystemClock.elapsedRealtime()
+            lastActivity = java.lang.ref.WeakReference(activity)
             Log.i(
                 TAG,
                 "🚀 lanzando Kiosk pay · externalId=${request.externalId} monto=${request.amount} " +
@@ -177,6 +178,7 @@ class KioskPaymentService(private val context: Context) {
         }
         pendingCallback = null
         cancelFocusProbes()
+        schedulePostResultProbes()
 
         val elapsedMs = SystemClock.elapsedRealtime() - launchedAtMs
         val failureMessage = data?.getStringExtra(KioskPayRequestIntentBuilder.Response.FAILURE_MESSAGE)
@@ -216,6 +218,7 @@ class KioskPaymentService(private val context: Context) {
     // --- Diagnóstico -------------------------------------------------------
 
     private var launchedAtMs = 0L
+    private var lastActivity: java.lang.ref.WeakReference<Activity>? = null
     private val authExecutor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private val probes = mutableListOf<Runnable>()
@@ -227,6 +230,20 @@ class KioskPaymentService(private val context: Context) {
             val probe = Runnable {
                 if (pendingCallback != null) logFocus(activity, "+${delayMs}ms")
             }
+            probes += probe
+            handler.postDelayed(probe, delayMs)
+        }
+    }
+
+    /**
+     * Sondas tras el resultado (1, 3, 6, 10 y 15 s): ¿cuándo termina Clover su
+     * actividad final en la pantalla cliente y quién queda arriba? Diagnóstico
+     * para ajustar el recovery diferido.
+     */
+    private fun schedulePostResultProbes() {
+        val activity = lastActivity?.get() ?: return
+        for (delayMs in longArrayOf(1_000L, 3_000L, 6_000L, 10_000L, 15_000L)) {
+            val probe = Runnable { logFocus(activity, "post-resultado +${delayMs}ms") }
             probes += probe
             handler.postDelayed(probe, delayMs)
         }

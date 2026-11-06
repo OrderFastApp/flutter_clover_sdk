@@ -197,7 +197,25 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         // onSaleResponse (puede ser inmediato si falla el lanzamiento).
         result.success(mapOf("success" to true, "message" to "Solicitud de pago Kiosk enviada"))
 
-        service.pay(currentActivity, PaymentRequest(amount = amount, externalId = externalId)) { response ->
+        val request = PaymentRequest(amount = amount, externalId = externalId)
+        service.pay(currentActivity, request) { response ->
+            // El intent builder Kiosk exige el token de app de Clover
+            // (`com.clover.account.token.app`), que no siempre existe (p. ej.
+            // app instalada por sideload). `sale` no lo necesita: se cae a él
+            // en vez de dejar el cobro bloqueado.
+            if (response.reason == "AUTH_FAILED") {
+                val legacy = this.paymentService
+                if (legacy != null) {
+                    Log.w(TAG, "⚠️ Kiosk pay sin auth de Clover (${response.message}) → fallback a sale")
+                    legacy.processPayment(request) { saleResponse ->
+                        channel.invokeMethod(
+                            "onSaleResponse",
+                            ar.com.orderfast.mappers.PaymentMapper.toMap(saleResponse)
+                        )
+                    }
+                    return@pay
+                }
+            }
             val responseMap = ar.com.orderfast.mappers.PaymentMapper.toMap(response)
             channel.invokeMethod("onSaleResponse", responseMap)
             resetCustomerDisplayAfterKioskPay(response.reason)

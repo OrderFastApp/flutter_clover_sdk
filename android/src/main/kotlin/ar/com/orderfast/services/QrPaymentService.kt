@@ -3,14 +3,21 @@ package ar.com.orderfast.services
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.os.Parcelable
 import android.util.Log
 import ar.com.orderfast.mappers.PaymentMapper
 import ar.com.orderfast.models.QrPaymentRequest
 import ar.com.orderfast.models.QrPaymentResponse
 import com.clover.common2.payments.PayIntent
+import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.Intents
+import com.clover.sdk.v3.order.LineItem
+import com.clover.sdk.v3.order.Order
+import com.clover.sdk.v3.order.OrderConnector
 import com.clover.sdk.v3.payments.Payment
+import java.util.concurrent.Executors
 
 /**
  * Cobro con QR (Pagos QR de Fiserv) vía la pantalla de pago de Clover.
@@ -31,6 +38,8 @@ class QrPaymentService(private val context: Context) {
     }
 
     private var pendingCallback: ((QrPaymentResponse) -> Unit)? = null
+    private val executor = Executors.newSingleThreadExecutor()
+    private val handler = Handler(Looper.getMainLooper())
 
     val isInFlight: Boolean get() = pendingCallback != null
 
@@ -57,13 +66,69 @@ class QrPaymentService(private val context: Context) {
             return
         }
 
+        // Se reserva ya: crear la orden corre fuera del hilo principal y un
+        // segundo QR no debe colarse mientras tanto.
+        pendingCallback = callback
+        executor.execute {
+            val cloverOrderId = try {
+                request.orderId ?: createCloverOrder(request)
+            } catch (e: Exception) {
+                Log.e(TAG, "No se pudo crear la orden de Clover para el QR", e)
+                handler.post {
+                    pendingCallback = null
+                    callback(
+                        failure(
+                            "ORDER_ERROR",
+                            e.message ?: "No se pudo crear la orden en Clover"
+                        )
+                    )
+                }
+                return@execute
+            }
+            handler.post { launch(activity, request, cloverOrderId, callback) }
+        }
+    }
+
+    /**
+     * La pantalla de pago de Clover (`DualDisplayRemoteProtocolRequestorActivity`)
+     * exige una orden: sin `orderId` termina con `no order ID` y devuelve
+     * `RESULT_CANCELED` al instante. Se crea una orden con una línea custom por
+     * el monto a cobrar.
+     */
+    private fun createCloverOrder(request: QrPaymentRequest): String {
+        val connector = OrderConnector(context, CloverAccount.getAccount(context), null)
+        try {
+            val order = connector.createOrder(
+                Order().setTitle("OrderFast #${request.externalId}")
+            )
+            connector.addCustomLineItem(
+                order.id,
+                LineItem()
+                    .setName("Pedido OrderFast #${request.externalId}")
+                    .setPrice(request.amount),
+                false
+            )
+            Log.d(TAG, "orden Clover creada: ${order.id} (amount=${request.amount})")
+            return order.id
+        } finally {
+            connector.disconnect()
+        }
+    }
+
+    private fun launch(
+        activity: Activity,
+        request: QrPaymentRequest,
+        cloverOrderId: String,
+        callback: (QrPaymentResponse) -> Unit
+    ) {
+        if (pendingCallback == null) return // dispose() mientras tanto
         try {
             val payIntent = PayIntent.Builder()
                 .action(Intents.ACTION_SECURE_PAY)
                 .amount(request.amount)
+                .orderId(cloverOrderId)
                 .externalPaymentId(request.externalId)
                 .isPresentQrcOnly(true)
-                .apply { request.orderId?.let { orderId(it) } }
                 .build()
 
             // `addTo` vuelca amount, orderId, externalPaymentId y
@@ -71,11 +136,11 @@ class QrPaymentService(private val context: Context) {
             val intent = Intent(Intents.ACTION_SECURE_PAY)
             payIntent.addTo(intent)
 
-            pendingCallback = callback
             activity.startActivityForResult(intent, REQUEST_CODE)
             Log.d(
                 TAG,
-                "QR presentado: amount=${request.amount}, externalPaymentId=${request.externalId}"
+                "QR presentado: amount=${request.amount}, " +
+                    "externalPaymentId=${request.externalId}, orderId=$cloverOrderId"
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error al presentar QR Code", e)

@@ -202,9 +202,10 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?): Boolean =
-        kioskPaymentService?.handleActivityResult(requestCode, resultCode, data)
-            ?: qrPaymentService?.handleActivityResult(requestCode, resultCode, data)
-            ?: false
+        // `handleActivityResult` devuelve false (no null) cuando el código no es
+        // suyo: hay que encadenar con `||`, no con `?:`.
+        (kioskPaymentService?.handleActivityResult(requestCode, resultCode, data) == true) ||
+            (qrPaymentService?.handleActivityResult(requestCode, resultCode, data) == true)
 
     private fun logCloverDeviceModel() {
         try {

@@ -202,7 +202,9 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?): Boolean =
-        kioskPaymentService?.handleActivityResult(requestCode, resultCode, data) ?: false
+        kioskPaymentService?.handleActivityResult(requestCode, resultCode, data)
+            ?: qrPaymentService?.handleActivityResult(requestCode, resultCode, data)
+            ?: false
 
     private fun logCloverDeviceModel() {
         try {
@@ -467,32 +469,25 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 orderId = orderId
             )
 
+            // Ack antes de lanzar: el resultado real llega por
+            // `onQrPaymentResponse` (puede ser inmediato si falla el lanzamiento).
+            result.success(mapOf(
+                "success" to true,
+                "message" to "QR Code presentado. Esperando que el cliente escanee el código."
+            ))
+
             qrPaymentService.presentQrCode(activity, request) { response ->
                 val responseMap = mapOf(
                     "success" to response.success,
                     "result" to response.result,
                     "reason" to response.reason,
                     "message" to response.message,
-                    "qrCodeData" to response.qrCodeData,
-                    "payment" to response.payment?.let { payment ->
-                        mapOf(
-                            "id" to payment.id,
-                            "orderId" to payment.orderId,
-                            "externalPaymentId" to payment.externalPaymentId,
-                            "amount" to payment.amount,
-                            "tipAmount" to payment.tipAmount,
-                            "taxAmount" to payment.taxAmount,
-                            "result" to payment.result
-                        )
+                    "payment" to response.payment?.let {
+                        ar.com.orderfast.mappers.PaymentMapper.toMap(it)
                     }
                 )
                 channel.invokeMethod("onQrPaymentResponse", responseMap)
             }
-
-            result.success(mapOf(
-                "success" to true,
-                "message" to "QR Code presentado. Esperando que el cliente escanee el código."
-            ))
         } catch (e: Exception) {
             Log.e(TAG, "Error al presentar QR Code", e)
             result.error("QR_PAYMENT_ERROR", e.message, null)
@@ -998,6 +993,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         paymentService?.dispose()
         paymentService = null
+        qrPaymentService?.dispose()
         qrPaymentService = null
         kioskPaymentService?.dispose()
         kioskPaymentService = null

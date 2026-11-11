@@ -224,13 +224,21 @@ class CloverSdkPlugin {
   /// Presenta un código QR para que el cliente escanee y realice el pago
   ///
   /// [amount] - Monto del pago en centavos (ej. 1000 para $10.00)
-  /// [externalId] - ID externo único para la transacción
-  /// [orderId] - ID de la orden en Clover (opcional)
+  /// [externalId] - ID externo único; viaja como `externalPaymentId` del pago
+  /// [orderId] - ID de una orden de Clover existente (opcional)
   ///
-  /// Muestra un código QR en la pantalla del dispositivo Clover que el cliente
-  /// puede escanear con su app de pago (Mercado Pago, PayPal, etc.) para realizar el pago.
+  /// Abre la pantalla de pago de Clover (Pagos QR de Fiserv) mostrando el QR
+  /// como único medio, para que el cliente lo escanee con su billetera.
   ///
-  /// La respuesta del pago llegará en el callback `onQrPaymentResponse`.
+  /// El retorno es solo el *ack* del lanzamiento. El resultado llega **una sola
+  /// vez** en `onQrPaymentResponse` con el mismo contrato que `onSaleResponse`:
+  /// `{success, result, reason, message, payment}`. `reason` puede ser `CANCEL`,
+  /// `FAIL`, `BUSY`, `NO_PAYMENT` o `EXCEPTION`. `payment` incluye
+  /// `orderId` (orden de Clover), `externalReferenceId` (ID del QR), `note`,
+  /// `attributes` (ID QR, ID Autorización, Lote, Cupón, Billetera, Medio,
+  /// Cuotas, Bin Tarjeta, ID Billetera), `cardTransaction`, `tender` y
+  /// `transactionInfo`. `Cuotas`, `Bin Tarjeta` y `last4` no vienen en
+  /// transferencias PCT.
   Future<Map<String, dynamic>> presentQrCode({
     required int amount,
     required String externalId,

@@ -226,6 +226,8 @@ class CloverSdkPlugin {
   /// [amount] - Monto del pago en centavos (ej. 1000 para $10.00)
   /// [externalId] - ID externo único; viaja como `externalPaymentId` del pago
   /// [orderId] - ID de una orden de Clover existente (opcional)
+  /// [reference] - referencia propia (p. ej. id de la orden de OrderFast); se
+  /// persiste y vuelve en [consumeOrphanQrResult] si la app muere durante el pago
   ///
   /// Abre la pantalla de pago de Clover (Pagos QR de Fiserv) mostrando el QR
   /// como único medio, para que el cliente lo escanee con su billetera.
@@ -243,16 +245,38 @@ class CloverSdkPlugin {
     required int amount,
     required String externalId,
     String? orderId,
+    String? reference,
   }) async {
     try {
       final result = await _channel.invokeMethod('presentQrCode', {
         'amount': amount,
         'externalId': externalId,
         if (orderId != null) 'orderId': orderId,
+        if (reference != null) 'reference': reference,
       });
       return Map<String, dynamic>.from(result);
     } catch (e) {
       return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Resultado de un pago QR que llegó con el proceso de la app reiniciado.
+  ///
+  /// Mientras Pagos QR está al frente, Android puede matar la app. El pago se
+  /// completa igual y el resultado llega a un proceso nuevo, sin el callback de
+  /// [presentQrCode]. El plugin lo guarda y este método lo entrega **una sola
+  /// vez** (o `null` si no hay). Llamarlo al arrancar, después de `initialize`.
+  ///
+  /// Mismo contrato que `onQrPaymentResponse` más `reference` (la pasada a
+  /// [presentQrCode]) y `externalId`. Con `success == true` el cliente ya pagó:
+  /// hay que completar la orden.
+  Future<Map<String, dynamic>?> consumeOrphanQrResult() async {
+    try {
+      final result = await _channel.invokeMethod('consumeOrphanQrResult');
+      if (result == null) return null;
+      return Map<String, dynamic>.from(result as Map);
+    } catch (e) {
+      return null;
     }
   }
 

@@ -83,6 +83,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "disableKioskMode" -> disableKioskMode(call, result)
                 "isKioskModeActive" -> isKioskModeActive(result)
                 "presentQrCode" -> presentQrCode(call, result)
+                "consumeOrphanQrResult" ->
+                    result.success((qrPaymentService ?: QrPaymentService(context)).consumeOrphanResult())
                 "enableScreensaver" -> enableScreensaver(call, result)
                 "disableScreensaver" -> disableScreensaver(result)
                 "startScreensaver" -> startScreensaver(result)
@@ -205,7 +207,10 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         // `handleActivityResult` devuelve false (no null) cuando el código no es
         // suyo: hay que encadenar con `||`, no con `?:`.
         (kioskPaymentService?.handleActivityResult(requestCode, resultCode, data) == true) ||
-            (qrPaymentService?.handleActivityResult(requestCode, resultCode, data) == true)
+            // Puede llegar antes de que Dart llame a `initialize` (proceso
+            // reiniciado): el servicio es liviano y el estado va en disco.
+            ((qrPaymentService ?: QrPaymentService(context))
+                .handleActivityResult(requestCode, resultCode, data))
 
     private fun logCloverDeviceModel() {
         try {
@@ -453,6 +458,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
 
             val orderId = call.argument<String>("orderId")
+            val reference = call.argument<String>("reference")
 
             val qrPaymentService = this.qrPaymentService ?: run {
                 result.error("NOT_INITIALIZED", "El SDK no está inicializado", null)
@@ -467,7 +473,8 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val request = QrPaymentRequest(
                 amount = amount,
                 externalId = externalId,
-                orderId = orderId
+                orderId = orderId,
+                reference = reference
             )
 
             // Ack antes de lanzar: el resultado real llega por
@@ -478,15 +485,7 @@ class CloverSdkPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             ))
 
             qrPaymentService.presentQrCode(activity, request) { response ->
-                val responseMap = mapOf(
-                    "success" to response.success,
-                    "result" to response.result,
-                    "reason" to response.reason,
-                    "message" to response.message,
-                    "payment" to response.payment?.let {
-                        ar.com.orderfast.mappers.PaymentMapper.toMap(it)
-                    }
-                )
+                val responseMap = QrPaymentService.responseToMap(response)
                 channel.invokeMethod("onQrPaymentResponse", responseMap)
             }
         } catch (e: Exception) {

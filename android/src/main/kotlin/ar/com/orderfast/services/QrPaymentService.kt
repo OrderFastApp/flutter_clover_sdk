@@ -38,6 +38,31 @@ class QrPaymentService(private val context: Context) {
         private const val TAG = "QrPaymentService"
         const val REQUEST_CODE = 0x5152 // "QR"
         private const val QR_TENDER_LABEL_KEY_PREFIX = "ar.com.fiserv.fiservqr"
+
+        /** Contrato de `onQrPaymentResponse` (igual que `onSaleResponse`). */
+        fun responseToMap(response: QrPaymentResponse): Map<String, Any?> = mapOf(
+            "success" to response.success,
+            "result" to response.result,
+            "reason" to response.reason,
+            "message" to response.message,
+            "payment" to response.payment?.let { PaymentMapper.toMap(it) }
+        )
+    }
+
+    private val store = QrPaymentStore(context)
+
+    /**
+     * Resultado de un pago QR que llegó con el proceso ya reiniciado (se
+     * entrega una sola vez). Ver [QrPaymentStore].
+     */
+    fun consumeOrphanResult(): Map<String, Any?>? = store.consumeOrphan()
+
+    /** Cierra un intento que falló antes de lanzar Pagos QR. */
+    private fun fail(callback: (QrPaymentResponse) -> Unit, response: QrPaymentResponse) {
+        pendingCallback = null
+        store.clearPending()
+        QrPaymentForegroundService.stop(context)
+        callback(response)
     }
 
     private var pendingCallback: ((QrPaymentResponse) -> Unit)? = null
@@ -72,32 +97,22 @@ class QrPaymentService(private val context: Context) {
         // Se reserva ya: crear la orden corre fuera del hilo principal y un
         // segundo QR no debe colarse mientras tanto.
         pendingCallback = callback
+        store.savePending(request)
+        QrPaymentForegroundService.start(context)
         executor.execute {
             val qrTender = try {
                 findQrTender()
             } catch (e: Exception) {
                 Log.e(TAG, "No se pudieron leer los tenders de Clover", e)
                 handler.post {
-                    pendingCallback = null
-                    callback(
-                        failure(
-                            "TENDER_ERROR",
-                            e.message ?: "No se pudieron leer los medios de pago de Clover"
-                        )
-                    )
+                    fail(callback, failure("TENDER_ERROR", e.message ?: "No se pudieron leer los medios de pago de Clover"))
                 }
                 return@execute
             }
             if (qrTender == null) {
                 Log.e(TAG, "No hay un tender de Pagos QR ($QR_TENDER_LABEL_KEY_PREFIX*)")
                 handler.post {
-                    pendingCallback = null
-                    callback(
-                        failure(
-                            "TENDER_NOT_FOUND",
-                            "Pagos QR no está instalado o habilitado en este Clover"
-                        )
-                    )
+                    fail(callback, failure("TENDER_NOT_FOUND", "Pagos QR no está instalado o habilitado en este Clover"))
                 }
                 return@execute
             }
@@ -106,13 +121,7 @@ class QrPaymentService(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(TAG, "No se pudo crear la orden de Clover para el QR", e)
                 handler.post {
-                    pendingCallback = null
-                    callback(
-                        failure(
-                            "ORDER_ERROR",
-                            e.message ?: "No se pudo crear la orden en Clover"
-                        )
-                    )
+                    fail(callback, failure("ORDER_ERROR", e.message ?: "No se pudo crear la orden en Clover"))
                 }
                 return@execute
             }
@@ -218,15 +227,16 @@ class QrPaymentService(private val context: Context) {
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error al presentar QR Code", e)
-            pendingCallback = null
-            callback(failure("EXCEPTION", e.message ?: "Error desconocido al presentar QR"))
+            fail(callback, failure("EXCEPTION", e.message ?: "Error desconocido al presentar QR"))
         }
     }
 
     /** @return true si el resultado era de este servicio. */
     fun handleActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         if (requestCode != REQUEST_CODE) return false
-        val callback = pendingCallback ?: run {
+        val callback = pendingCallback
+        val persisted = store.loadPending()
+        if (callback == null && persisted == null) {
             Log.w(TAG, "resultado QR sin cobro pendiente (code=$resultCode): ignorado")
             return true
         }
@@ -237,7 +247,8 @@ class QrPaymentService(private val context: Context) {
         Log.i(
             TAG,
             "resultado QR · code=$resultCode payment=${payment?.id} " +
-                "result=${payment?.result} failure=$failureMessage"
+                "result=${payment?.result} failure=$failureMessage " +
+                "orphan=${callback == null}"
         )
 
         val response = when {
@@ -255,7 +266,20 @@ class QrPaymentService(private val context: Context) {
                 payment = PaymentMapper.toPaymentInfo(payment)
             )
         }
-        callback(response)
+
+        if (callback != null) {
+            store.clearPending()
+            QrPaymentForegroundService.stop(context)
+            callback(response)
+        } else {
+            // El proceso se reinició mientras Pagos QR estaba al frente: no hay
+            // callback ni estado de Dart. Se guarda para que Dart lo consuma al
+            // arrancar y complete la orden (el cliente ya pagó).
+            Log.w(TAG, "resultado QR HUÉRFANO guardado (success=${response.success})")
+            store.saveOrphan(responseToMap(response), persisted)
+            store.clearPending()
+            QrPaymentForegroundService.stop(context)
+        }
         return true
     }
 

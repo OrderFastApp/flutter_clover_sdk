@@ -4,5 +4,13 @@
   <!-- Permisos necesarios para el SDK de Clover -->
   <uses-permission android:name="com.clover.permission.LAUNCH_PAYMENTS" />
   <uses-permission android:name="com.clover.permission.READ_MERCHANT" />
+  <!-- Mantiene viva la app mientras Pagos QR está al frente -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+  <application>
+    <service
+      android:name=".services.QrPaymentForegroundService"
+      android:exported="false" />
+  </application>
   
 </manifest>

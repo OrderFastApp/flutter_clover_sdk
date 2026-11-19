@@ -9,7 +9,13 @@ data class QrPaymentRequest(
     /** Se envía como `externalPaymentId` (campo reservado para el ISV). */
     val externalId: String,
     /** Id de una orden de Clover existente (opcional). */
-    val orderId: String? = null
+    val orderId: String? = null,
+    /**
+     * Referencia propia de la app (p. ej. el id de la orden de OrderFast). Se
+     * persiste con el pago y vuelve en el resultado huérfano para poder
+     * completar la orden aunque el proceso haya muerto.
+     */
+    val reference: String? = null
 )
 
 data class QrPaymentResponse(

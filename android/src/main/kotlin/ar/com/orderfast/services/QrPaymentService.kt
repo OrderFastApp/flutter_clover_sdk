@@ -13,6 +13,8 @@ import ar.com.orderfast.models.QrPaymentResponse
 import com.clover.common2.payments.PayIntent
 import com.clover.sdk.util.CloverAccount
 import com.clover.sdk.v1.Intents
+import com.clover.sdk.v1.tender.TenderConnector
+import com.clover.sdk.v3.base.Tender
 import com.clover.sdk.v3.order.LineItem
 import com.clover.sdk.v3.order.Order
 import com.clover.sdk.v3.order.OrderConnector
@@ -22,8 +24,8 @@ import java.util.concurrent.Executors
 /**
  * Cobro con QR (Pagos QR de Fiserv) vía la pantalla de pago de Clover.
  *
- * Lanza `ACTION_SECURE_PAY` con `EXTRA_PRESENT_QRC_ONLY` (Clover muestra el QR
- * como único medio de pago) usando `startActivityForResult`: el resultado llega
+ * Lanza `ACTION_SECURE_PAY` con el tender de Pagos QR (Fiserv) preseleccionado
+ * (`EXTRA_CUSTOMER_TENDER`) usando `startActivityForResult`: el resultado llega
  * a [handleActivityResult] con el `Payment` creado en `EXTRA_PAYMENT`.
  *
  * Nota: `ACTION_CUSTOMER_TENDER` NO sirve para esto; es el intent con el que
@@ -35,6 +37,7 @@ class QrPaymentService(private val context: Context) {
     companion object {
         private const val TAG = "QrPaymentService"
         const val REQUEST_CODE = 0x5152 // "QR"
+        private const val QR_TENDER_LABEL_KEY_PREFIX = "ar.com.fiserv.fiservqr"
     }
 
     private var pendingCallback: ((QrPaymentResponse) -> Unit)? = null
@@ -70,6 +73,34 @@ class QrPaymentService(private val context: Context) {
         // segundo QR no debe colarse mientras tanto.
         pendingCallback = callback
         executor.execute {
+            val qrTender = try {
+                findQrTender()
+            } catch (e: Exception) {
+                Log.e(TAG, "No se pudieron leer los tenders de Clover", e)
+                handler.post {
+                    pendingCallback = null
+                    callback(
+                        failure(
+                            "TENDER_ERROR",
+                            e.message ?: "No se pudieron leer los medios de pago de Clover"
+                        )
+                    )
+                }
+                return@execute
+            }
+            if (qrTender == null) {
+                Log.e(TAG, "No hay un tender de Pagos QR ($QR_TENDER_LABEL_KEY_PREFIX*)")
+                handler.post {
+                    pendingCallback = null
+                    callback(
+                        failure(
+                            "TENDER_NOT_FOUND",
+                            "Pagos QR no está instalado o habilitado en este Clover"
+                        )
+                    )
+                }
+                return@execute
+            }
             val cloverOrderId = try {
                 request.orderId ?: createCloverOrder(request)
             } catch (e: Exception) {
@@ -85,7 +116,7 @@ class QrPaymentService(private val context: Context) {
                 }
                 return@execute
             }
-            handler.post { launch(activity, request, cloverOrderId, callback) }
+            handler.post { launch(activity, request, cloverOrderId, qrTender, callback) }
         }
     }
 
@@ -115,10 +146,35 @@ class QrPaymentService(private val context: Context) {
         }
     }
 
+    /**
+     * Pagos QR (Fiserv) es un *tender personalizado* (`CUSTOMER_TENDER` /
+     * `MERCHANT_TENDER`), no el QR propio de Clover: hay que preseleccionar su
+     * tender. `labelKey` = `ar.com.fiserv.fiservqr.dev` (sandbox) o `.prod`.
+     */
+    private fun findQrTender(): Tender? {
+        val connector = TenderConnector(context, CloverAccount.getAccount(context), null)
+        try {
+            // El connector devuelve `v1.tender.Tender`; `PayIntent` pide `v3.base.Tender`.
+            val tender = connector.tenders.firstOrNull {
+                it.labelKey?.startsWith(QR_TENDER_LABEL_KEY_PREFIX) == true
+            } ?: return null
+            Log.d(TAG, "tender Pagos QR: id=${tender.id} labelKey=${tender.labelKey} enabled=${tender.enabled}")
+            return Tender()
+                .setId(tender.id)
+                .setLabel(tender.label)
+                .setLabelKey(tender.labelKey)
+                .setOpensCashDrawer(tender.opensCashDrawer)
+                .setEnabled(tender.enabled)
+        } finally {
+            connector.disconnect()
+        }
+    }
+
     private fun launch(
         activity: Activity,
         request: QrPaymentRequest,
         cloverOrderId: String,
+        qrTender: Tender,
         callback: (QrPaymentResponse) -> Unit
     ) {
         if (pendingCallback == null) return // dispose() mientras tanto
@@ -128,11 +184,12 @@ class QrPaymentService(private val context: Context) {
                 .amount(request.amount)
                 .orderId(cloverOrderId)
                 .externalPaymentId(request.externalId)
-                .isPresentQrcOnly(true)
+                .customerTender(qrTender)
+                .requiresCustomTender(true)
                 .build()
 
-            // `addTo` vuelca amount, orderId, externalPaymentId y
-            // EXTRA_PRESENT_QRC_ONLY: no hace falta repetirlos a mano.
+            // `addTo` vuelca amount, orderId, externalPaymentId y el tender
+            // preseleccionado: no hace falta repetirlos a mano.
             val intent = Intent(Intents.ACTION_SECURE_PAY)
             payIntent.addTo(intent)
 

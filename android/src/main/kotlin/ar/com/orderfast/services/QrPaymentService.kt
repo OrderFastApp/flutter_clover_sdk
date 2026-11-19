@@ -155,8 +155,18 @@ class QrPaymentService(private val context: Context) {
         val connector = TenderConnector(context, CloverAccount.getAccount(context), null)
         try {
             // El connector devuelve `v1.tender.Tender`; `PayIntent` pide `v3.base.Tender`.
-            val tender = connector.tenders.firstOrNull {
+            val all = connector.tenders
+            Log.d(
+                TAG,
+                "tenders del merchant (${all.size}): " +
+                    all.joinToString { "[${it.label} | ${it.labelKey} | enabled=${it.enabled}]" }
+            )
+            // Por labelKey (`ar.com.fiserv.fiservqr.dev|prod`); si el equipo lo
+            // registró con otra clave, se acepta un label que diga "QR".
+            val tender = all.firstOrNull {
                 it.labelKey?.startsWith(QR_TENDER_LABEL_KEY_PREFIX) == true
+            } ?: all.firstOrNull {
+                it.label?.contains("QR", ignoreCase = true) == true
             } ?: return null
             Log.d(TAG, "tender Pagos QR: id=${tender.id} labelKey=${tender.labelKey} enabled=${tender.enabled}")
             return Tender()

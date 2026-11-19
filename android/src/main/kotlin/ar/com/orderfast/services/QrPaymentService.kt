@@ -161,13 +161,20 @@ class QrPaymentService(private val context: Context) {
                 "tenders del merchant (${all.size}): " +
                     all.joinToString { "[${it.label} | ${it.labelKey} | enabled=${it.enabled}]" }
             )
-            // Por labelKey (`ar.com.fiserv.fiservqr.dev|prod`); si el equipo lo
-            // registró con otra clave, se acepta un label que diga "QR".
-            val tender = all.firstOrNull {
-                it.labelKey?.startsWith(QR_TENDER_LABEL_KEY_PREFIX) == true
-            } ?: all.firstOrNull {
-                it.label?.contains("QR", ignoreCase = true) == true
-            } ?: return null
+            // Pagos QR registra varios tenders con el prefijo
+            // `ar.com.fiserv.fiservqr.<env>`: el base ("QR PosNet", puede venir
+            // deshabilitado), `.api` ("QR API"), `.pix` y `.crypto`. Clover
+            // rechaza ("Tender unavailable and required") uno deshabilitado, así
+            // que se elige entre los habilitados, priorizando `.api`.
+            val candidates = all.filter {
+                it.labelKey?.startsWith(QR_TENDER_LABEL_KEY_PREFIX) == true && it.enabled
+            }
+            val tender = candidates.firstOrNull { it.labelKey?.endsWith(".api") == true }
+                ?: candidates.firstOrNull {
+                    val key = it.labelKey.orEmpty()
+                    !key.endsWith(".pix") && !key.endsWith(".crypto")
+                }
+                ?: return null
             Log.d(TAG, "tender Pagos QR: id=${tender.id} labelKey=${tender.labelKey} enabled=${tender.enabled}")
             return Tender()
                 .setId(tender.id)
